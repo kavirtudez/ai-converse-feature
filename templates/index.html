@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Language Recognition</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+    <style>
+        :root {
+            --primary-color: #3a86ff;
+            --secondary-color: #8338ec;
+            --success-color: #06d6a0;
+            --warning-color: #ffbe0b;
+            --danger-color: #ef476f;
+            --text-color: #2b2d42;
+            --light-text: #8d99ae;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --hello-color: #3a86ff;
+            --thanks-color: #8338ec;
+            --iloveyou-color: #ef476f;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        header p {
+            color: var(--light-text);
+            font-size: 1.1rem;
+        }
+        
+        .language-toggle {
+            position: absolute;
+            top: 0;
+            right: 0;
+        }
+        
+        .lang-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            opacity: 0.7;
+        }
+        
+        .lang-btn:hover {
+            opacity: 1;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .lang-btn.active {
+            background-color: var(--success-color);
+            opacity: 1;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        
+        @media (max-width: 992px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .language-toggle {
+                position: relative;
+                display: flex;
+                justify-content: center;
+                margin-top: 1rem;
+            }
+        }
+        
+        .video-container {
+            position: relative;
+            aspect-ratio: 4/3;
+            background-color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+        
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .results-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+        }
+        
+        .prediction-card {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .prediction-display {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .prediction-text {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--secondary-color);
+            transition: color 0.3s ease;
+        }
+        
+        .prediction-hello {
+            color: var(--hello-color);
+        }
+        
+        .prediction-thanks {
+            color: var(--thanks-color);
+        }
+        
+        .prediction-iloveyou {
+            color: var(--iloveyou-color);
+            animation: heartbeat 1.5s infinite;
+        }
+        
+        @keyframes heartbeat {
+            0% { transform: scale(1); }
+            15% { transform: scale(1.1); }
+            30% { transform: scale(1); }
+            45% { transform: scale(1.1); }
+            60% { transform: scale(1); }
+        }
+        
+        .high-confidence {
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .confidence-badge {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 500;
+            font-size: 1rem;
+            transition: background-color 0.3s ease;
+        }
+        
+        .confidence-low {
+            background-color: var(--light-text);
+        }
+        
+        .confidence-medium {
+            background-color: var(--primary-color);
+        }
+        
+        .confidence-high {
+            background-color: var(--success-color);
+        }
+        
+        .progress {
+            width: 100%;
+            height: 12px;
+            background-color: #e9ecef;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background-color: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 6px;
+        }
+        
+        .status {
+            font-size: 0.9rem;
+            color: var(--light-text);
+            margin-top: 0.5rem;
+        }
+        
+        .sentence-card {
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sentence-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .sentence-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .btn-clear {
+            background-color: var(--light-text);
+        }
+        
+        .btn-clear:hover {
+            background-color: var(--danger-color);
+        }
+        
+        .sentence-content {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: var(--text-color);
+            margin-top: 1rem;
+            text-align: center;
+            min-height: 80px;
+        }
+        
+        .sign-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .sign-badge {
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            margin-right: 0.5rem;
+            font-size: 1rem;
+            animation: fadeIn 0.5s;
+            transition: transform 0.3s ease;
+        }
+        
+        .sign-badge:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .sign-badge-hello {
+            background-color: var(--hello-color);
+        }
+        
+        .sign-badge-thanks {
+            background-color: var(--thanks-color);
+        }
+        
+        .sign-badge-iloveyou {
+            background-color: var(--iloveyou-color);
+        }
+        
+        /* Tagalog badge classes */
+        .sign-badge-kamusta {
+            background-color: var(--hello-color);
+        }
+        
+        .sign-badge-salamat {
+            background-color: var(--thanks-color);
+        }
+        
+        .sign-badge-mahal.kita {
+            background-color: var(--iloveyou-color);
+        }
+        
+        /* Validity status styles */
+        .prediction-invalid {
+            opacity: 0.5;
+        }
+        
+        .sign-type-indicator {
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 10px;
+            background-color: rgba(0,0,0,0.1);
+            color: var(--light-text);
+        }
+        
+        .sign-type-dynamic {
+            background-color: rgba(58, 134, 255, 0.2);
+        }
+        
+        .sign-type-static {
+            background-color: rgba(239, 71, 111, 0.2);
+        }
+        
+        .motion-indicator {
+            width: 100%;
+            height: 4px;
+            background-color: #e9ecef;
+            border-radius: 2px;
+            margin-top: 0.5rem;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .motion-bar {
+            height: 100%;
+            background-color: var(--warning-color);
+            width: 0%;
+            transition: width 0.2s ease;
+            border-radius: 2px;
+        }
+        
+        .motion-threshold {
+            position: absolute;
+            height: 100%;
+            width: 2px;
+            background-color: var(--primary-color);
+            top: 0;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .help-card {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .sign-examples {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+        
+        .sign-example {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .sign-icon {
+            font-size: 2rem;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            margin-bottom: 0.5rem;
+        }
+        
+        .sign-icon-hello {
+            background-color: var(--hello-color);
+        }
+        
+        .sign-icon-thanks {
+            background-color: var(--thanks-color);
+        }
+        
+        .sign-icon-iloveyou {
+            background-color: var(--iloveyou-color);
+        }
+        
+        .sign-label {
+            font-weight: 500;
+        }
+        
+        .sign-description {
+            font-size: 0.8rem;
+            color: var(--light-text);
+        }
+        
+        /* Sign-specific styles */
+        .sign-info {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            display: none;
+            background-color: rgba(0,0,0,0.05);
+        }
+        
+        .sign-info.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+        
+        .sign-info-hello {
+            border-left: 4px solid var(--hello-color);
+        }
+        
+        .sign-info-thanks {
+            border-left: 4px solid var(--thanks-color);
+        }
+        
+        .sign-info-iloveyou {
+            border-left: 4px solid var(--iloveyou-color);
+        }
+        
+        /* Add a hint about current sign requirements */
+        .sign-hint {
+            font-style: italic;
+            color: var(--light-text);
+            margin-top: 5px;
+        }
+        
+        /* More obvious invalid prediction */
+        .prediction-invalid {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="language-toggle">
+                <button id="en-btn" class="lang-btn active">English</button>
+                <button id="tl-btn" class="lang-btn">Tagalog</button>
+            </div>
+            <h1>Sign Language Recognition</h1>
+            <p id="subtitle">Recognizing signs: hello, thanks, iloveyou</p>
+        </header>
+        
+        <div class="main-content">
+            <div class="video-container">
+                <video id="webcam" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
+            
+            <div class="results-container">
+                <div class="card prediction-card">
+                    <div class="card-title" id="prediction-title">Current Prediction</div>
+                    <div class="prediction-display">
+                        <div id="prediction-container" class="prediction-display">
+                            <div id="prediction-text" class="prediction-text">Waiting...</div>
+                            <div id="sign-type" class="sign-type-indicator">Static</div>
+                        </div>
+                        <div id="confidence" class="confidence-badge">0.00%</div>
+                    </div>
+                    <div class="progress">
+                        <div id="progress-bar" class="progress-bar"></div>
+                    </div>
+                    <div class="motion-indicator">
+                        <div id="motion-bar" class="motion-bar"></div>
+                        <div id="motion-threshold" class="motion-threshold"></div>
+                    </div>
+                    <div id="status" class="status">Initializing webcam...</div>
+                    
+                    <!-- Sign-specific help info, shown dynamically -->
+                    <div id="hello-info" class="sign-info sign-info-hello">
+                        <strong id="hello-info-title">Hello sign:</strong>
+                        <div id="hello-info-desc">Place your hand near your forehead.</div>
+                        <div class="sign-hint" id="hello-hint">Hold hand at forehead height with moderate movement.</div>
+                    </div>
+                    <div id="thanks-info" class="sign-info sign-info-thanks">
+                        <strong id="thanks-info-title">Thanks sign:</strong>
+                        <div id="thanks-info-desc">Tap your fingertips on your chin.</div>
+                        <div class="sign-hint" id="thanks-hint">Use one or both hands near chin with gentle tapping motion.</div>
+                    </div>
+                    <div id="iloveyou-info" class="sign-info sign-info-iloveyou">
+                        <strong id="iloveyou-info-title">I Love You sign:</strong>
+                        <div id="iloveyou-info-desc">Extend thumb, index, and pinky fingers.</div>
+                        <div class="sign-hint" id="iloveyou-hint">Hold hand still with middle and ring fingers curled inward.</div>
+                    </div>
+                </div>
+                
+                <div class="card sentence-card">
+                    <div class="sentence-title">
+                        <div class="card-title" id="sentence-title">Recognized Signs</div>
+                        <div class="sentence-actions">
+                            <button id="clear-btn" class="btn btn-clear">
+                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                    <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                </svg>
+                                <span id="clear-text">Clear</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="sign-badges" class="sign-badges"></div>
+                    <div id="sentence" class="sentence-content">No signs detected yet</div>
+                </div>
+                
+                <div class="card help-card">
+                    <div class="card-title" id="tips-title">Sign Tips</div>
+                    <div class="sign-examples">
+                        <div class="sign-example">
+                            <div class="sign-icon sign-icon-hello">👋</div>
+                            <div class="sign-label" id="hello-label">Hello</div>
+                            <div class="sign-description" id="hello-desc">Place hand at forehead</div>
+                        </div>
+                        <div class="sign-example">
+                            <div class="sign-icon sign-icon-thanks">🙏</div>
+                            <div class="sign-label" id="thanks-label">Thanks</div>
+                            <div class="sign-description" id="thanks-desc">Tap fingers on chin with both hands</div>
+                        </div>
+                        <div class="sign-example">
+                            <div class="sign-icon sign-icon-iloveyou">❤️</div>
+                            <div class="sign-label" id="iloveyou-label">I Love You</div>
+                            <div class="sign-description" id="iloveyou-desc">Extend thumb, index & pinky</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const predictionText = document.getElementById('prediction-text');
+        const predictionContainer = document.getElementById('prediction-container');
+        const signType = document.getElementById('sign-type');
+        const confidenceText = document.getElementById('confidence');
+        const statusText = document.getElementById('status');
+        const progressBar = document.getElementById('progress-bar');
+        const motionBar = document.getElementById('motion-bar');
+        const motionThreshold = document.getElementById('motion-threshold');
+        const sentenceText = document.getElementById('sentence');
+        const signBadges = document.getElementById('sign-badges');
+        const clearBtn = document.getElementById('clear-btn');
+        const enBtn = document.getElementById('en-btn');
+        const tlBtn = document.getElementById('tl-btn');
+        
+        // Sign info elements
+        const helloInfo = document.getElementById('hello-info');
+        const thanksInfo = document.getElementById('thanks-info');
+        const iloveyouInfo = document.getElementById('iloveyou-info');
+
+        // Text elements for language switching
+        const subtitle = document.getElementById('subtitle');
+        const predictionTitle = document.getElementById('prediction-title');
+        const sentenceTitle = document.getElementById('sentence-title');
+        const tipsTitle = document.getElementById('tips-title');
+        const clearText = document.getElementById('clear-text');
+        const helloLabel = document.getElementById('hello-label');
+        const thanksLabel = document.getElementById('thanks-label');
+        const iloveyouLabel = document.getElementById('iloveyou-label');
+        const helloDesc = document.getElementById('hello-desc');
+        const thanksDesc = document.getElementById('thanks-desc');
+        const iloveyouDesc = document.getElementById('iloveyou-desc');
+
+        // Set canvas dimensions - will be updated when video loads
+        canvas.width = 640;
+        canvas.height = 480;
+
+        // App state
+        let isProcessing = false;
+        let lastFrameTime = 0;
+        const frameInterval = 50;
+        const clientId = Math.random().toString(36).substring(7);
+        let lastPrediction = '';
+        let lastConfidence = 0;
+        let lastSentence = [];
+        let frameCount = 0;
+        let currentMotion = 0;
+        const HIGH_CONFIDENCE_THRESHOLD = 0.85; // Slightly lower than backend for better UI feedback
+        const MEDIUM_CONFIDENCE_THRESHOLD = 0.60; // Slightly lower for better UI feedback
+        const MOTION_THRESHOLD = 0.02; // Same as backend's new value
+        
+        // Sign types mapping
+        const signTypes = {
+            'hello': 'dynamic',
+            'kamusta': 'dynamic',
+            'thanks': 'dynamic',
+            'salamat': 'dynamic',
+            'iloveyou': 'static',
+            'mahal kita': 'static'
+        };
+        
+        // Language settings
+        let currentLanguage = '{{ language }}' || 'english';
+        const translations = {
+            english: {
+                subtitle: 'Recognizing signs: hello, thanks, iloveyou',
+                predictionTitle: 'Current Prediction',
+                sentenceTitle: 'Recognized Signs',
+                tipsTitle: 'Sign Tips',
+                clearText: 'Clear',
+                noSigns: 'No signs detected yet',
+                waitingHands: 'Move your hands to sign',
+                collectingFrames: 'Collecting frames',
+                hello: 'Hello',
+                thanks: 'Thanks',
+                iloveyou: 'I Love You',
+                helloDesc: 'Place hand at forehead',
+                thanksDesc: 'Tap fingers on chin with both hands',
+                iloveyouDesc: 'Extend thumb, index & pinky',
+                dynamicSign: 'Dynamic',
+                staticSign: 'Static',
+                waitingValid: 'Adjust hand position...',
+                helloInfoTitle: 'Hello sign:',
+                helloInfoDesc: 'Place your hand near your forehead.',
+                helloHint: 'Hold hand at forehead height with moderate movement.',
+                thanksInfoTitle: 'Thanks sign:',
+                thanksInfoDesc: 'Tap your fingertips on your chin.',
+                thanksHint: 'Use one or both hands near chin with gentle tapping motion.',
+                iloveyouInfoTitle: 'I Love You sign:',
+                iloveyouInfoDesc: 'Extend thumb, index, and pinky fingers.',
+                iloveyouHint: 'Hold hand still with middle and ring fingers curled inward.'
+            },
+            tagalog: {
+                subtitle: 'Pagkilala ng senyas: kamusta, salamat, mahal kita',
+                predictionTitle: 'Kasalukuyang Pagtukoy',
+                sentenceTitle: 'Mga Nakilalang Senyas',
+                tipsTitle: 'Mga Payo sa Pagsenyas',
+                clearText: 'Burahin',
+                noSigns: 'Wala pang nakilalang senyas',
+                waitingHands: 'Igalaw ang iyong mga kamay para mag-senyas',
+                collectingFrames: 'Nangongolekta ng frames',
+                hello: 'Kamusta',
+                thanks: 'Salamat',
+                iloveyou: 'Mahal Kita',
+                helloDesc: 'Ilagay ang kamay sa noo',
+                thanksDesc: 'I-tap ang mga daliri sa baba gamit ang dalawang kamay',
+                iloveyouDesc: 'I-extend ang hinlalaki, hintuturo at hinliliit',
+                dynamicSign: 'Gumagalaw',
+                staticSign: 'Hindi Gumagalaw',
+                waitingValid: 'Ayusin ang posisyon ng kamay...',
+                helloInfoTitle: 'Kamusta sign:',
+                helloInfoDesc: 'Ilagay ang iyong kamay malapit sa iyong noo.',
+                helloHint: 'Hawakan ang kamay sa taas ng noo na may katamtamang paggalaw.',
+                thanksInfoTitle: 'Salamat sign:',
+                thanksInfoDesc: 'I-tap ang mga daliri sa iyong baba.',
+                thanksHint: 'Gumamit ng isa o dalawang kamay malapit sa baba na may mahinang pagtapik.',
+                iloveyouInfoTitle: 'Mahal Kita sign:',
+                iloveyouInfoDesc: 'I-extend ang hinlalaki, hintuturo, at hinliliit.',
+                iloveyouHint: 'Hawakan ang kamay na nakatikom ang gitna at palasingsingan na daliri.'
+            }
+        };
+
+        // Update UI language
+        function updateLanguage(lang) {
+            const texts = translations[lang];
+            
+            subtitle.textContent = texts.subtitle;
+            predictionTitle.textContent = texts.predictionTitle;
+            sentenceTitle.textContent = texts.sentenceTitle;
+            tipsTitle.textContent = texts.tipsTitle;
+            clearText.textContent = texts.clearText;
+            helloLabel.textContent = texts.hello;
+            thanksLabel.textContent = texts.thanks;
+            iloveyouLabel.textContent = texts.iloveyou;
+            helloDesc.textContent = texts.helloDesc;
+            thanksDesc.textContent = texts.thanksDesc;
+            iloveyouDesc.textContent = texts.iloveyouDesc;
+            
+            if (sentenceText.textContent === 'No signs detected yet' || 
+                sentenceText.textContent === 'Wala pang nakilalang senyas') {
+                sentenceText.textContent = texts.noSigns;
+            }
+            
+            if (statusText.textContent.includes('Place your hands') || 
+                statusText.textContent.includes('Ilagay ang iyong') ||
+                statusText.textContent.includes('Move your hands') ||
+                statusText.textContent.includes('Igalaw ang iyong')) {
+                statusText.textContent = texts.waitingHands;
+            } else if (statusText.textContent.includes('Collecting frames') || 
+                       statusText.textContent.includes('Nangongolekta ng frames')) {
+                const frames = statusText.textContent.match(/\d+\/\d+/);
+                if (frames) {
+                    statusText.textContent = `${texts.collectingFrames}: ${frames[0]}`;
+                }
+            }
+            
+            // Update active button styling
+            if (lang === 'english') {
+                enBtn.classList.add('active');
+                tlBtn.classList.remove('active');
+            } else {
+                tlBtn.classList.add('active');
+                enBtn.classList.remove('active');
+            }
+            
+            // Update displayed badges to match current language
+            updateSignBadges();
+            
+            // Update sign type text
+            if (predictionText.textContent in signTypes) {
+                const type = signTypes[predictionText.textContent];
+                signType.textContent = texts[type + 'Sign'];
+                signType.className = `sign-type-indicator sign-type-${type}`;
+            }
+            
+            // Update sign info elements
+            document.getElementById('hello-info-title').textContent = texts.helloInfoTitle;
+            document.getElementById('hello-info-desc').textContent = texts.helloInfoDesc;
+            document.getElementById('hello-hint').textContent = texts.helloHint;
+            
+            document.getElementById('thanks-info-title').textContent = texts.thanksInfoTitle;
+            document.getElementById('thanks-info-desc').textContent = texts.thanksInfoDesc;
+            document.getElementById('thanks-hint').textContent = texts.thanksHint;
+            
+            document.getElementById('iloveyou-info-title').textContent = texts.iloveyouInfoTitle;
+            document.getElementById('iloveyou-info-desc').textContent = texts.iloveyouInfoDesc;
+            document.getElementById('iloveyou-hint').textContent = texts.iloveyouHint;
+        }
+        
+        // Language button event listeners
+        enBtn.addEventListener('click', () => {
+            if (currentLanguage !== 'english') {
+                currentLanguage = 'english';
+                updateLanguage(currentLanguage);
+            }
+        });
+        
+        tlBtn.addEventListener('click', () => {
+            if (currentLanguage !== 'tagalog') {
+                currentLanguage = 'tagalog';
+                updateLanguage(currentLanguage);
+            }
+        });
+
+        // Initialize with correct language
+        updateLanguage(currentLanguage);
+
+        // Clear recognized signs
+        clearBtn.addEventListener('click', () => {
+            sentenceText.textContent = translations[currentLanguage].noSigns;
+            signBadges.innerHTML = '';
+            lastSentence = [];
+        });
+        
+        // Update sign badges based on current language
+        function updateSignBadges() {
+            if (lastSentence.length > 0) {
+                signBadges.innerHTML = '';
+                lastSentence.forEach(sign => {
+                    const badge = document.createElement('span');
+                    // Determine the class based on sign content
+                    let signClass;
+                    if (['hello', 'kamusta'].includes(sign)) {
+                        signClass = 'hello';
+                    } else if (['thanks', 'salamat'].includes(sign)) {
+                        signClass = 'thanks';
+                    } else if (['iloveyou', 'mahal kita'].includes(sign)) {
+                        signClass = 'iloveyou';
+                    }
+                    
+                    badge.className = `sign-badge sign-badge-${signClass}`;
+                    badge.textContent = sign;
+                    signBadges.appendChild(badge);
+                });
+            }
+        }
+
+        // Start the webcam
+        async function startWebcam() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 30, max: 30 }
+                    }
+                });
+                video.srcObject = stream;
+                
+                video.addEventListener('loadedmetadata', () => {
+                    // Update canvas size to match video
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    statusText.textContent = translations[currentLanguage].waitingHands;
+                });
+                
+                video.addEventListener('play', () => {
+                    requestAnimationFrame(processFrame);
+                });
+            } catch (error) {
+                console.error('Error accessing webcam:', error);
+                statusText.textContent = 'Error accessing webcam. Please check permissions.';
+            }
+        }
+
+        // Update motion display
+        function updateMotionDisplay(motion) {
+            // Update motion bar width (0-100%)
+            const motionPercent = Math.min(motion * 1000, 100); // Scale up for better visibility
+            motionBar.style.width = `${motionPercent}%`;
+            
+            // Set the threshold indicator position (% of width)
+            const thresholdPercent = MOTION_THRESHOLD * 1000;
+            motionThreshold.style.left = `${thresholdPercent}%`;
+            
+            currentMotion = motion;
+        }
+
+        // Update prediction display
+        function updatePredictionDisplay(prediction, confidence, isValid) {
+            // Hide all sign info sections
+            helloInfo.classList.remove('active');
+            thanksInfo.classList.remove('active');
+            iloveyouInfo.classList.remove('active');
+            
+            // Remove all classes first
+            predictionText.classList.remove(
+                'prediction-hello', 
+                'prediction-thanks', 
+                'prediction-iloveyou', 
+                'high-confidence',
+                'prediction-invalid'
+            );
+            
+            // Add appropriate class based on prediction
+            if (prediction === 'hello' || prediction === 'kamusta') {
+                predictionText.classList.add('prediction-hello');
+                
+                // Update sign type indicator
+                signType.textContent = translations[currentLanguage].dynamicSign;
+                signType.className = 'sign-type-indicator sign-type-dynamic';
+                
+                // Show hello sign info
+                helloInfo.classList.add('active');
+                
+            } else if (prediction === 'thanks' || prediction === 'salamat') {
+                predictionText.classList.add('prediction-thanks');
+                
+                // Update sign type indicator
+                signType.textContent = translations[currentLanguage].dynamicSign;
+                signType.className = 'sign-type-indicator sign-type-dynamic';
+                
+                // Show thanks sign info
+                thanksInfo.classList.add('active');
+                
+            } else if (prediction === 'iloveyou' || prediction === 'mahal kita') {
+                predictionText.classList.add('prediction-iloveyou');
+                
+                // Update sign type indicator
+                signType.textContent = translations[currentLanguage].staticSign;
+                signType.className = 'sign-type-indicator sign-type-static';
+                
+                // Show iloveyou sign info
+                iloveyouInfo.classList.add('active');
+            } else {
+                // Hide sign type for non-sign predictions
+                signType.style.display = 'none';
+            }
+            
+            // Show sign type for sign predictions
+            if (['hello', 'kamusta', 'thanks', 'salamat', 'iloveyou', 'mahal kita'].includes(prediction)) {
+                signType.style.display = 'inline-block';
+            }
+            
+            // Add high confidence class if applicable
+            if (confidence >= HIGH_CONFIDENCE_THRESHOLD) {
+                predictionText.classList.add('high-confidence');
+            }
+            
+            // Make invalid sign feedback more obvious
+            if (!isValid) {
+                predictionText.classList.add('prediction-invalid');
+                predictionText.style.opacity = '0.6'; // More obvious dimming
+            } else {
+                predictionText.style.opacity = '1';
+            }
+            
+            // Update text content
+            predictionText.textContent = prediction;
+        }
+
+        // Update confidence display
+        function updateConfidenceDisplay(confidence) {
+            const confidencePercent = (confidence * 100).toFixed(2);
+            confidenceText.textContent = `${confidencePercent}%`;
+            
+            // Remove all classes first
+            confidenceText.classList.remove('confidence-low', 'confidence-medium', 'confidence-high');
+            
+            // Add appropriate class based on confidence level
+            if (confidence >= HIGH_CONFIDENCE_THRESHOLD) {
+                confidenceText.classList.add('confidence-high');
+            } else if (confidence >= MEDIUM_CONFIDENCE_THRESHOLD) {
+                confidenceText.classList.add('confidence-medium');
+            } else {
+                confidenceText.classList.add('confidence-low');
+            }
+        }
+
+        // Process frame
+        async function processFrame(timestamp) {
+            if (!isProcessing && timestamp - lastFrameTime >= frameInterval) {
+                isProcessing = true;
+                lastFrameTime = timestamp;
+                frameCount++;
+
+                try {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imageData = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    const response = await fetch('http://localhost:5000/predict', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ 
+                            image: imageData,
+                            clientId: clientId,
+                            language: currentLanguage
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        // Extract motion from the frame data
+                        let motion = 0;
+                        const motionMatch = result.frame.match(/Motion: (\d+\.\d+)/);
+                        if (motionMatch && motionMatch.length > 1) {
+                            motion = parseFloat(motionMatch[1]);
+                            updateMotionDisplay(motion);
+                        }
+                        
+                        // Always show prediction, even if "Waiting for hands"
+                        if (result.prediction !== lastPrediction || 
+                            Math.abs(result.confidence - lastConfidence) > 0.05 || 
+                            result.is_valid_sign !== predictionText.classList.contains('prediction-invalid')) {
+                            
+                            updatePredictionDisplay(result.prediction, result.confidence, result.is_valid_sign);
+                            lastPrediction = result.prediction;
+                            
+                            // Update confidence display
+                            updateConfidenceDisplay(result.confidence);
+                            lastConfidence = result.confidence;
+                        }
+                        
+                        // Update progress bar
+                        const progress = (result.frames_collected / 30) * 100;
+                        progressBar.style.width = `${progress}%`;
+                        
+                        // Update sentence display and badges
+                        if (result.sentence && 
+                            (result.sentence.length !== lastSentence.length || 
+                             result.sentence.join() !== lastSentence.join())) {
+                            
+                            lastSentence = [...result.sentence];
+                            
+                            // Update sentence text
+                            if (lastSentence.length === 0) {
+                                sentenceText.textContent = translations[currentLanguage].noSigns;
+                            } else {
+                                sentenceText.textContent = lastSentence.join(' ');
+                            }
+                            
+                            // Update badges
+                            updateSignBadges();
+                        }
+                        
+                        const img = new Image();
+                        img.onload = () => {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        };
+                        img.src = result.frame;
+                        
+                        // Updated messages for better UX
+                        if (result.prediction === 'Waiting for hands...' || result.prediction === 'Naghihintay ng kamay...') {
+                            statusText.textContent = translations[currentLanguage].waitingHands;
+                            signType.style.display = 'none';
+                        } else {
+                            if (!result.is_valid_sign) {
+                                statusText.textContent = translations[currentLanguage].waitingValid;
+                            } else {
+                                statusText.textContent = `${translations[currentLanguage].collectingFrames}: ${result.frames_collected}/30`;
+                            }
+                        }
+                    } else {
+                        console.error('Prediction failed:', result.error);
+                        statusText.textContent = 'Error: ' + result.error;
+                    }
+                } catch (error) {
+                    console.error('Error sending frame:', error);
+                    statusText.textContent = 'Connection error. Is the server running?';
+                } finally {
+                    isProcessing = false;
+                }
+            }
+            
+            requestAnimationFrame(processFrame);
+        }
+
+        // Start the application
+        startWebcam();
+    </script>
+</body>
+</html> 

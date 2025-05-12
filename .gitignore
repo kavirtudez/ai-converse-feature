@@ -1,0 +1,36 @@
+# Python virtual environment
+venv/
+env/
+ENV/
+
+# TensorFlow.js model (can be regenerated)
+tfjs_model/
+
+# Python compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Large model files
+*.h5
+*.pyd
+*.dll
+
+# Local development settings
+.env
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# OS specific files
+.DS_Store
+Thumbs.db 
