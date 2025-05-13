@@ -1,109 +1,116 @@
-# Sign Language Recognition Web Interface
+# Dynamic Sign Language Recognition System
 
-A web application that uses a machine learning model to recognize three sign language gestures in real-time:
-- 'hello'
-- 'thanks'
-- 'iloveyou'
+This system integrates three components to create a complete sign language recognition and communication pipeline:
+1. **Sign Recognition App**: Python app that recognizes sign language gestures using AI
+2. **Sign Animation**: Angular-based frontend for displaying sign language animations
+3. **AI Response**: Ollama AI for generating responses to sign language input
 
-## Prerequisites
+## System Requirements
 
-- Windows 10/11
-- Python 3.8 or higher
-- A webcam
-- Administrator rights (for setup)
+- Python 3.8+ with pip
+- Node.js 16+ and npm
+- Angular CLI
+- Ollama (for AI text generation)
+- Webcam/Camera for sign language input
+- Windows/macOS/Linux
 
-## Setup Instructions
+## Quick Setup
 
-### 1. Set up the Python Environment
-
-The easiest way to set up your environment is using the provided setup script:
+### 1. Python Environment Setup
 
 ```bash
-# Run this command with administrator privileges (right-click Command Prompt/PowerShell and select "Run as administrator")
-python setup_env.py
+# Clone the repository
+git clone [repository-url]
+cd dynamic-sign-recognizer
+
+# Create and activate a virtual environment
+python -m venv signenv
+# On Windows:
+signenv\Scripts\activate
+# On macOS/Linux:
+source signenv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-This script will:
-- Create a virtual environment called `venv`
-- Install all required packages with compatible versions
-- Avoid dependency conflicts
+### 2. Ollama Setup
 
-### 2. Activate the Virtual Environment
+1. Download and install Ollama from [ollama.ai](https://ollama.ai)
+2. Pull the TinyLlama model:
+```bash
+ollama pull tinyllama
+```
+3. Start the Ollama server (it should run on port 11434)
 
-After the setup script completes, activate the virtual environment:
+### 3. Angular Frontend Setup
 
 ```bash
-# On Windows
-venv\Scripts\activate
-
-# On macOS/Linux
-source venv/bin/activate
+cd asl&fslmodel/frontend
+npm install
 ```
 
-### 3. Convert the Model
+## Running the System
 
-Once the environment is set up, convert the Keras model to TensorFlow.js format:
+You need to run these components in the following order:
 
-```bash
-python convert_model.py
-```
-
-This will create a `tfjs_model` directory containing the converted model files.
-
-### 4. Run the Flask Server
-
-Start the Flask server to handle the sign recognition:
+### 1. Start the Sign Recognition App
 
 ```bash
+# In the main project directory
 python app.py
 ```
+This runs the sign recognition service on http://localhost:5000
 
-The server will start at `http://127.0.0.1:5000`
+### 2. Start the Angular Frontend
 
-### 5. Open the Web Interface
-
-Open your web browser and navigate to:
+```bash
+cd asl&fslmodel/frontend
+ng serve
 ```
-http://127.0.0.1:5000
+This runs the Angular app on http://localhost:4200
+
+### 3. Start the Orchestration Service
+
+```bash
+# In the main project directory
+python sign_conversation.py
 ```
+This runs the orchestration service on http://localhost:5001
 
-## Usage
+### 4. Use the System
 
-1. Allow camera access when prompted by your browser
-2. Position yourself in front of the camera
-3. Perform one of the three signs:
-   - 'hello' - Wave with your hand near your head
-   - 'thanks' - Move your flat hand downward from your chin
-   - 'iloveyou' - Extend your thumb, index finger and pinky finger while keeping other fingers closed
+Open your browser and navigate to:
+- **http://localhost:5000** - For the sign recognition interface
+- **http://localhost:5001** - For the conversation interface
+- **http://localhost:4200** - For the sign animation interface
 
-4. The interface will display the predicted sign and confidence level
+## How to Use
+
+1. Allow camera access when prompted
+2. Make sign gestures (supported signs: hello, thanks, iloveyou)
+3. The system will recognize and display your signs as text
+4. Click "Send to AI" to send the recognized signs to Ollama
+5. View the AI response
+6. Clear the sentence to start over
 
 ## Troubleshooting
 
-If you encounter issues:
+- **Camera not working**: Check browser permissions and ensure no other app is using the camera
+- **Signs not recognized**: Ensure good lighting and clear hand visibility
+- **Ollama not responding**: Check that Ollama is running with `ps aux | grep ollama` or Task Manager
+- **Angular app not loading**: Verify Node.js version (16+) and that all Angular dependencies are installed
 
-1. **Dependency Problems**: Try running the setup script again with administrator privileges
-2. **Camera Not Working**: Make sure your browser has permission to access the camera
-3. **Model Conversion Fails**: Check that you have the correct versions of tensorflow (2.12.0) and tensorflowjs (3.18.0)
-4. **Low Recognition Accuracy**: 
-   - Ensure good lighting
-   - Keep your hands within the camera frame
-   - Make clear, deliberate movements
+## System Architecture
 
-## Project Structure
+- **app.py**: Core sign language recognition service using MediaPipe and TensorFlow
+- **sign_conversation.py**: Orchestration service connecting sign recognition with Ollama
+- **Angular frontend**: Provides sign language animation based on text input
 
-- `app.py`: Flask server that processes video frames and makes predictions
-- `convert_model.py`: Script to convert the Keras model to TensorFlow.js format
-- `setup_env.py`: Script to set up the Python environment
-- `action.h5`: Pre-trained Keras model
-- `index.html` & `app.js`: Web interface for capturing and displaying video
-- `templates/`: Contains Flask HTML templates
-- `tfjs_model/`: Contains the converted TensorFlow.js model (after conversion)
+## License
 
-## Technologies Used
+[Your License Information]
 
-- TensorFlow/Keras
-- TensorFlow.js
-- MediaPipe
-- Flask
-- HTML/CSS/JavaScript 
+## Contributors
+
+[List of contributors] 

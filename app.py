@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, make_response
 from flask_cors import CORS
 import tensorflow as tf
 import numpy as np
@@ -12,6 +12,7 @@ from collections import deque
 import threading
 import queue
 import time
+import requests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,8 +27,19 @@ absl.logging.set_verbosity(absl.logging.ERROR)
 tf.config.threading.set_inter_op_parallelism_threads(2)
 tf.config.threading.set_intra_op_parallelism_threads(2)
 
+# Create the Flask app with CORS options
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True, allow_headers="*", expose_headers="*")
+
+# Add OPTIONS method handler to all routes for CORS preflight requests
+@app.route('/', methods=['OPTIONS'])
+@app.route('/<path:path>', methods=['OPTIONS'])
+def options_handler(path=None):
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # Initialize MediaPipe with optimized settings
 mp_holistic = mp.solutions.holistic
@@ -422,6 +434,81 @@ def prediction_worker():
 prediction_thread = threading.Thread(target=prediction_worker, daemon=True)
 prediction_thread.start()
 
+# Define a function to notify sign_conversation.py of sentence updates
+def notify_conversation_service(client_id, sentence):
+    """Send sentence updates to the conversation service"""
+    try:
+        # Only send if the sentence has content
+        if sentence:
+            logger.info(f"Notifying conversation service of sentence update: {sentence}")
+            requests.post("http://localhost:5001/api/sentence_update", 
+                         json={"clientId": client_id, "sentence": sentence},
+                         timeout=0.5)  # Short timeout to avoid blocking
+    except Exception as e:
+        # Don't let notification failures affect the main app
+        logger.warning(f"Failed to notify conversation service: {str(e)}")
+
+# Add function to send sentence to Ollama
+def send_to_ollama(client_id, sentence):
+    """Send the current sentence to Ollama via sign_conversation.py"""
+    try:
+        if not sentence:
+            logger.warning("Cannot send empty sentence to Ollama")
+            return {"success": False, "error": "Empty sentence"}
+            
+        logger.info(f"Sending sentence to Ollama: {sentence}")
+        
+        # Call the sign_conversation.py API to send to Ollama
+        response = requests.post(
+            "http://localhost:5001/api/send_conversation",
+            json={"clientId": client_id},
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("success", False):
+                logger.info(f"Successfully sent to Ollama, response: {data.get('response')}")
+                return {"success": True, "response": data.get("response")}
+            else:
+                error = data.get("error", "Unknown error")
+                logger.warning(f"Failed to send to Ollama: {error}")
+                return {"success": False, "error": error}
+        else:
+            logger.warning(f"Failed to send to Ollama, status code: {response.status_code}")
+            return {"success": False, "error": f"Status code: {response.status_code}"}
+            
+    except Exception as e:
+        logger.error(f"Error sending to Ollama: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+# Add new route for sending to Ollama
+@app.route('/send_to_ollama', methods=['POST'])
+def api_send_to_ollama():
+    """API endpoint to send the current sentence to Ollama"""
+    client_id = request.json.get('clientId', 'default')
+    
+    if client_id in sequence_buffer:
+        sentence = list(sequence_buffer[client_id]['sentence'])
+        result = send_to_ollama(client_id, sentence)
+        
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "sentence": sentence,
+                "response": result["response"]
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": result["error"]
+            }), 500
+    
+    return jsonify({
+        "success": False,
+        "error": "Client ID not found"
+    }), 404
+
 @app.route('/')
 def home():
     return render_template('index.html', language='english')
@@ -546,6 +633,9 @@ def predict():
                         sequence_buffer[client_id]['current_action'] = None
                         sequence_buffer[client_id]['consecutive_predictions'] = 0
                         
+                        # Notify conversation service of updated sentence
+                        notify_conversation_service(client_id, list(sequence_buffer[client_id]['sentence']))
+                
                 # Check if we have consistent predictions
                 elif len(sequence_buffer[client_id]['predictions']) >= 3:  # Reduced from 5 for even faster detection
                     # Use a majority vote from recent predictions
@@ -598,6 +688,9 @@ def predict():
                                         # Reset for next prediction
                                         sequence_buffer[client_id]['current_action'] = None
                                         sequence_buffer[client_id]['consecutive_predictions'] = 0
+                                        
+                                        # Notify conversation service of updated sentence
+                                        notify_conversation_service(client_id, list(sequence_buffer[client_id]['sentence']))
             
             # Handle case when hands might not be perfectly detected but we're still getting predictions
             elif not hands_present and sequence_buffer[client_id]['empty_frame_counter'] > MAX_EMPTY_FRAMES * 2:
@@ -667,6 +760,66 @@ def predict():
             'details': error_details if app.debug else 'Enable debug mode for details',
             'success': False
         }), 500
+
+@app.route('/get_sentence', methods=['GET'])
+def get_sentence():
+    client_id = request.args.get('clientId', 'default')
+    if client_id in sequence_buffer:
+        sentence = list(sequence_buffer[client_id]['sentence'])
+        return jsonify({
+            'sentence': sentence,
+            'success': True
+        })
+    return jsonify({
+        'sentence': [],
+        'success': False
+    })
+
+@app.route('/clear_sentence', methods=['POST'])
+def clear_sentence():
+    client_id = request.json.get('clientId', 'default')
+    if client_id in sequence_buffer:
+        sequence_buffer[client_id]['sentence'].clear()
+        # Notify conversation service of cleared sentence
+        notify_conversation_service(client_id, [])
+        return jsonify({
+            'success': True
+        })
+    return jsonify({
+        'success': False
+    })
+
+@app.route('/test', methods=['GET'])
+def test():
+    return jsonify({
+        'status': 'Sign recognition service is running',
+        'success': True
+    })
+
+@app.route('/test_sign', methods=['POST'])
+def test_sign():
+    """Test endpoint to simulate sign recognition for debugging"""
+    client_id = request.json.get('clientId', 'default')
+    sign = request.json.get('sign')
+    
+    if sign not in actions:
+        return jsonify({
+            'error': f'Invalid sign: {sign}. Valid signs are: {actions}',
+            'success': False
+        }), 400
+    
+    # Initialize sequence buffer for new clients
+    if client_id not in sequence_buffer:
+        sequence_buffer[client_id] = init_client_buffer()
+    
+    # Add sign to sentence if not already there
+    if sign not in sequence_buffer[client_id]['sentence']:
+        sequence_buffer[client_id]['sentence'].append(sign)
+        
+    return jsonify({
+        'sentence': list(sequence_buffer[client_id]['sentence']),
+        'success': True
+    })
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000, host='0.0.0.0', threaded=True) 

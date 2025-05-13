@@ -503,6 +503,40 @@
             text-decoration: line-through;
             opacity: 0.6;
         }
+        
+        .btn-send {
+            background-color: var(--success-color);
+        }
+        
+        .btn-send:hover {
+            background-color: #04b589;
+        }
+        
+        .response-card {
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+        
+        .response-content {
+            font-size: 1.2rem;
+            padding: 0.8rem;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            min-height: 60px;
+            margin: 0.8rem 0;
+            transition: all 0.3s ease;
+        }
+        
+        .highlight-response {
+            background-color: rgba(6, 214, 160, 0.2);
+            animation: pulse-response 1.5s;
+        }
+        
+        @keyframes pulse-response {
+            0% { background-color: rgba(6, 214, 160, 0.2); }
+            50% { background-color: rgba(6, 214, 160, 0.4); }
+            100% { background-color: rgba(6, 214, 160, 0.2); }
+        }
     </style>
 </head>
 <body>
@@ -570,6 +604,9 @@
                                 </svg>
                                 <span id="clear-text">Clear</span>
                             </button>
+                            <button id="sendOllamaBtn" class="btn btn-send">
+                                <i class="fas fa-paper-plane"></i> Send to AI
+                            </button>
                         </div>
                     </div>
                     <div id="sign-badges" class="sign-badges"></div>
@@ -595,6 +632,14 @@
                             <div class="sign-description" id="iloveyou-desc">Extend thumb, index & pinky</div>
                         </div>
                     </div>
+                </div>
+                
+                <div class="card response-card" style="display: none;">
+                    <div class="card-title">AI Response</div>
+                    <div class="response-content" id="responseContent">
+                        Waiting for response...
+                    </div>
+                    <div class="status" id="responseStatus"></div>
                 </div>
             </div>
         </div>
@@ -813,9 +858,36 @@
 
         // Clear recognized signs
         clearBtn.addEventListener('click', () => {
-            sentenceText.textContent = translations[currentLanguage].noSigns;
-            signBadges.innerHTML = '';
-            lastSentence = [];
+            clearBtn.disabled = true;
+            
+            // Send request to server to clear sentence
+            fetch('http://localhost:5000/clear_sentence', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ clientId: clientId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    sentenceText.textContent = translations[currentLanguage].noSigns;
+                    signBadges.innerHTML = '';
+                    lastSentence = [];
+                    console.log('Sentence cleared successfully');
+                } else {
+                    console.error('Failed to clear sentence:', data.error);
+                }
+                clearBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error clearing sentence:', error);
+                sentenceText.textContent = translations[currentLanguage].noSigns;
+                signBadges.innerHTML = '';
+                lastSentence = [];
+                clearBtn.disabled = false;
+            });
         });
         
         // Update sign badges based on current language
@@ -988,6 +1060,7 @@
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
+                            'Accept': 'application/json'
                         },
                         body: JSON.stringify({ 
                             image: imageData,
@@ -1075,8 +1148,130 @@
             requestAnimationFrame(processFrame);
         }
 
+        // Add function to send to Ollama
+        function sendToOllama() {
+            // Disable the button during processing
+            const sendBtn = document.getElementById('sendOllamaBtn');
+            const responseCard = document.querySelector('.response-card');
+            const responseContent = document.getElementById('responseContent');
+            const responseStatus = document.getElementById('responseStatus');
+            
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+            
+            // Show the response card
+            responseCard.style.display = 'block';
+            responseContent.textContent = 'Waiting for response...';
+            responseStatus.textContent = 'Processing...';
+            
+            // Send the request
+            fetch('http://localhost:5000/send_to_ollama', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    clientId: clientId
+                }),
+                credentials: 'omit'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to AI';
+                
+                if (data.success) {
+                    responseContent.textContent = data.response;
+                    responseStatus.textContent = 'Response received successfully.';
+                    responseStatus.style.color = 'var(--success-color)';
+                    
+                    // Add animation to highlight the new response
+                    responseContent.classList.add('highlight-response');
+                    setTimeout(() => {
+                        responseContent.classList.remove('highlight-response');
+                    }, 1500);
+                } else {
+                    responseContent.textContent = 'Error: ' + (data.error || 'Unknown error');
+                    responseStatus.textContent = 'Failed to get response.';
+                    responseStatus.style.color = 'var(--danger-color)';
+                }
+            })
+            .catch(error => {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to AI';
+                
+                console.error('Error:', error);
+                responseContent.textContent = 'Error: ' + error.message;
+                responseStatus.textContent = 'Failed to communicate with server.';
+                responseStatus.style.color = 'var(--danger-color)';
+            });
+        }
+        
+        // Add event listener to the send button
+        document.getElementById('sendOllamaBtn').addEventListener('click', sendToOllama);
+
         // Start the application
         startWebcam();
+
+        // Add debug code at the end of script to check server connectivity
+        // Add debugging functions
+        function checkServerStatus() {
+            console.log("Checking server status...");
+            
+            // Check app.py server
+            fetch('http://localhost:5000/test')
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Sign recognition app status:", data);
+                    if (data.success) {
+                        statusText.textContent = "Server connected successfully. Ready to use.";
+                    }
+                })
+                .catch(error => {
+                    console.error("Sign recognition app not responding:", error);
+                    statusText.textContent = "Error: Sign recognition server not responding. Please check if app.py is running.";
+                });
+            
+            // Test a sign directly if needed (for debugging)
+            function testSign(sign) {
+                fetch('http://localhost:5000/test_sign', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        clientId: clientId,
+                        sign: sign
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(`Test sign '${sign}' result:`, data);
+                    if (data.success) {
+                        updateSentenceDisplay(data.sentence);
+                        lastSentence = [...data.sentence];
+                        updateSignBadges();
+                    }
+                })
+                .catch(error => {
+                    console.error(`Error testing sign '${sign}':`, error);
+                });
+            }
+            
+            // Expose test function globally for debugging
+            window.testSign = testSign;
+            window.clientId = clientId;
+        }
+
+        // Call status check after startup
+        setTimeout(checkServerStatus, 2000);
     </script>
 </body>
 </html> 

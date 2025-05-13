@@ -1,36 +1,77 @@
-# Python virtual environment
-venv/
-env/
-ENV/
-
-# TensorFlow.js model (can be regenerated)
-tfjs_model/
-
-# Python compiled files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-
-# Distribution / packaging
-dist/
+.Python
+env/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
 *.egg-info/
+.installed.cfg
+*.egg
+signenv/
+venv/
+ENV/
 
-# Large model files
+# TensorFlow models and checkpoints
 *.h5
-*.pyd
-*.dll
+*.pb
+*.tflite
+*.safetensors
+*.onnx
+*.ckpt*
 
-# Local development settings
-.env
-.vscode/
-.idea/
+# MediaPipe
+*_model/
 
 # Logs
 *.log
+*.logs
 logs/
+log/
 
-# OS specific files
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 .DS_Store
-Thumbs.db 
+
+# Data
+*.csv
+*.json
+!package.json
+*.xml
+*.db
+*.sqlite3
+
+# Angular
+/asl&fslmodel/frontend/node_modules
+/asl&fslmodel/frontend/.angular
+/asl&fslmodel/frontend/dist
+/asl&fslmodel/frontend/.cache
+npm-debug.log
+yarn-error.log
+
+# Misc
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Ollama models (potentially large)
+ollama_models/ 
