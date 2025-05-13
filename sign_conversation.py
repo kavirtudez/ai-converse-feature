@@ -37,13 +37,13 @@ def add_cors_headers(response):
 sign_recognition_process = None
 angular_process = None
 
-# Ollama settings
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "tinyllama"  # Changed from llama3 to use a smaller model
+# Gemini settings - point to our Gemini integration service
+GEMINI_URL = "http://127.0.0.1:5002/process_sign_sentence"
+GEMINI_STATUS_URL = "http://127.0.0.1:5002/test"  # Use the test endpoint which is working
 
 # Flask app and Angular app URLs
-SIGN_APP_URL = "http://localhost:5000"
-ANGULAR_APP_URL = "http://localhost:4200"
+SIGN_APP_URL = "http://127.0.0.1:5000"
+ANGULAR_APP_URL = "http://127.0.0.1:4200"
 
 # Variable to store the current sentence
 current_sentence = []
@@ -52,6 +52,16 @@ last_update_time = time.time()
 # Thread for polling current sentence
 sentence_polling_thread = None
 stop_polling = False
+
+# Track last successful Gemini request
+last_successful_gemini_request = time.time()
+
+# Trigger an immediate Gemini connection check
+def trigger_gemini_connection_check():
+    """Force an immediate check of the Gemini connection"""
+    global gemini_connection_check_event
+    if gemini_connection_check_event:
+        gemini_connection_check_event.set()
 
 # Add a direct sentence update endpoint
 @app.route('/api/sentence_update', methods=['POST'])
@@ -91,32 +101,43 @@ def poll_sign_app_for_sentence():
         try:
             # Only poll if we haven't received a direct update recently
             if time.time() - last_update_time > 5:  # Only poll if no updates for 5 seconds
-                response = requests.get(f"{SIGN_APP_URL}/get_sentence?clientId=default", timeout=3)
-                logger.info(f"Received response from sign app: Status {response.status_code}")
-                
-                if response.status_code == 200:
-                    try:
-                        data = response.json()
-                        logger.info(f"Parsed response data: {data}")
-                        
-                        if data.get('success', False):
-                            new_sentence = data.get('sentence', [])
-                            # Only emit if there's a change
-                            if new_sentence != current_sentence:
-                                current_sentence = new_sentence
-                                last_update_time = time.time()
-                                logger.info(f"Sentence updated: {current_sentence}")
-                                try:
-                                    # Force emit via socket
-                                    socketio.emit('sentence_update', {'sentence': current_sentence})
-                                    # Also immediately try to send a REST API update for clients using direct API
-                                    socketio.sleep(0)  # Allow emit to process
-                                except Exception as e:
-                                    logger.error(f"Error emitting sentence update: {str(e)}")
-                    except ValueError as e:
-                        logger.error(f"Error parsing JSON response: {str(e)}, Response: {response.text}")
-                else:
-                    logger.warning(f"Failed to get sentence, status code: {response.status_code}, Response: {response.text}")
+                try:
+                    # Use the SIGN_APP_URL that was detected to work in check_and_emit_status
+                    url = f"{SIGN_APP_URL}/get_sentence?clientId=default"
+                    logger.info(f"Polling for sentence at {url}")
+                    
+                    response = requests.get(url, timeout=5)  # Increased timeout from 3 to 5 seconds
+                    logger.info(f"Received response from sign app: Status {response.status_code}")
+                    
+                    if response.status_code == 200:
+                        try:
+                            data = response.json()
+                            logger.info(f"Parsed response data: {data}")
+                            
+                            if data.get('success', False):
+                                new_sentence = data.get('sentence', [])
+                                # Only emit if there's a change
+                                if new_sentence != current_sentence:
+                                    current_sentence = new_sentence
+                                    last_update_time = time.time()
+                                    logger.info(f"Sentence updated: {current_sentence}")
+                                    try:
+                                        # Force emit via socket
+                                        socketio.emit('sentence_update', {'sentence': current_sentence})
+                                        # Also immediately try to send a REST API update for clients using direct API
+                                        socketio.sleep(0)  # Allow emit to process
+                                    except Exception as e:
+                                        logger.error(f"Error emitting sentence update: {str(e)}")
+                        except ValueError as e:
+                            logger.error(f"Error parsing JSON response: {str(e)}, Response: {response.text}")
+                    else:
+                        logger.warning(f"Failed to get sentence, status code: {response.status_code}, Response: {response.text}")
+                except requests.ConnectionError as e:
+                    logger.warning(f"Connection error to sign app: {str(e)}")
+                except requests.Timeout as e:
+                    logger.warning(f"Timeout polling sign app: {str(e)}")
+                except Exception as e:
+                    logger.error(f"Error during polling request: {str(e)}")
             
             # Force periodic updates even if no change detected
             # This ensures clients have the latest sentence
@@ -207,72 +228,86 @@ def check_service(url, max_attempts=10):
     logger.error(f"Service at {url} failed to start after {max_attempts} attempts")
     return False
 
-# Get response from Ollama
-def get_ollama_response(user_sentence):
+# Get response from Gemini with enhanced error handling and retry
+def get_gemini_response(user_sentence):
     try:
-        logger.info(f"Sending to Ollama: '{user_sentence}'")
+        logger.info(f"Sending to Gemini: '{user_sentence}'")
         
-        # Create a more conversational and helpful prompt
-        prompt = f"""You are a friendly AI assistant communicating with someone using sign language.
+        # Enhanced retry logic with exponential backoff
+        max_attempts = 5  # Increased from 3
+        base_wait_time = 1  # Start with 1 second wait
         
-The person has signed: "{user_sentence}"
-
-Respond in a natural, conversational way. Keep your response short and simple (5-10 words maximum) 
-since it will be translated back to sign language. Be positive, helpful, and engaging.
-
-If the message is a greeting (like "hello"), respond with a greeting.
-If the message shows appreciation, acknowledge it warmly.
-If the message expresses feelings, respond empathetically.
-For any other message, provide a friendly, relevant response.
-
-Your response (5-10 words maximum):"""
-        
-        # Try multiple times with backoff
-        max_attempts = 3
         for attempt in range(max_attempts):
             try:
+                # Log retry attempts
+                if attempt > 0:
+                    logger.info(f"Retry attempt {attempt+1}/{max_attempts} for Gemini request")
+                
+                # Make request with increasing timeout
                 response = requests.post(
-                    OLLAMA_URL,
+                    GEMINI_URL,
                     json={
-                        "model": OLLAMA_MODEL,
-                        "prompt": prompt,
-                        "stream": False,
-                        "max_tokens": 25,  # Allow slightly more tokens for better responses
-                        "temperature": 0.7  # Add some creativity but keep it focused
+                        "sentence": user_sentence.split() if isinstance(user_sentence, str) else user_sentence,
+                        "clientId": "default"
                     },
-                    timeout=10 if attempt == 0 else 15  # Longer timeout on retry
+                    timeout=10 * (attempt + 1)  # Increasing timeout with each retry
                 )
                 
                 if response.status_code == 200:
                     response_data = response.json()
                     result = response_data.get('response', '').strip()
                     
-                    # Basic filtering to ensure reasonable response
-                    if not result or len(result) < 2:
-                        result = "Hello, nice to meet you!"
+                    # Signal successful connection to the connection checker
+                    global last_successful_gemini_request
+                    last_successful_gemini_request = time.time()
                     
-                    logger.info(f"Ollama response: '{result}'")
+                    logger.info(f"Gemini response: '{result}'")
                     return result
-                else:
-                    logger.warning(f"Ollama returned status code {response.status_code} on attempt {attempt+1}")
+                    
+                elif response.status_code == 404:
+                    # Model not found - critical error
+                    logger.error(f"Gemini model not found. Please ensure Gemini service is running with updated models.")
+                    return "I cannot respond now"
+                    
+                elif response.status_code >= 500:
+                    # Server error - retry
+                    logger.warning(f"Gemini server error (status {response.status_code}) on attempt {attempt+1}")
+                    wait_time = base_wait_time * (2 ** attempt)  # Exponential backoff
                     if attempt < max_attempts - 1:
-                        time.sleep(1)  # Wait before retry
+                        time.sleep(wait_time)
+                else:
+                    # Other error - retry
+                    logger.warning(f"Gemini returned status code {response.status_code} on attempt {attempt+1}")
+                    wait_time = base_wait_time * (2 ** attempt)  # Exponential backoff
+                    if attempt < max_attempts - 1:
+                        time.sleep(wait_time)
                     
             except requests.exceptions.Timeout:
-                logger.warning(f"Ollama request timed out on attempt {attempt+1}")
+                logger.warning(f"Gemini request timed out on attempt {attempt+1}")
+                wait_time = base_wait_time * (2 ** attempt)  # Exponential backoff
                 if attempt < max_attempts - 1:
-                    time.sleep(1)  # Wait before retry
+                    time.sleep(wait_time)
+                    
+            except requests.exceptions.ConnectionError:
+                logger.error(f"Connection error to Gemini on attempt {attempt+1}. Is the service running?")
+                # Try to restart the Gemini service connection
+                trigger_gemini_connection_check()
+                wait_time = base_wait_time * (2 ** attempt)  # Exponential backoff
+                if attempt < max_attempts - 1:
+                    time.sleep(wait_time)
+                    
             except Exception as e:
-                logger.error(f"Error in Ollama request on attempt {attempt+1}: {str(e)}")
+                logger.error(f"Error in Gemini request on attempt {attempt+1}: {str(e)}")
+                wait_time = base_wait_time * (2 ** attempt)  # Exponential backoff
                 if attempt < max_attempts - 1:
-                    time.sleep(1)  # Wait before retry
+                    time.sleep(wait_time)
         
-        # If all attempts failed, provide a generic response
-        logger.warning("All Ollama attempts failed, using fallback response")
-        return "Nice to talk with you!"
+        # If all attempts failed, provide a generic response (max 5 words)
+        logger.warning("All Gemini attempts failed, using fallback response")
+        return "I hear you"
     except Exception as e:
-        logger.error(f"Error getting Ollama response: {str(e)}")
-        return "I'm listening. Please continue."
+        logger.error(f"Error getting Gemini response: {str(e)}")
+        return "Please continue"
 
 # Send text to Angular app for translation to sign language
 def send_to_angular_app(text):
@@ -368,7 +403,7 @@ def api_clear_sentence():
         logger.error(f"Error clearing sentence: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
 
-# API endpoint for sending conversation to Ollama
+# API endpoint for sending conversation to Gemini
 @app.route('/api/send_conversation', methods=['POST'])
 def api_send_conversation():
     try:
@@ -384,17 +419,17 @@ def api_send_conversation():
         sentence = " ".join(current_sentence)
         logger.info(f"Processing sentence: {sentence}")
         
-        # Get response from Ollama
-        ollama_response = get_ollama_response(sentence)
+        # Get response from Gemini
+        gemini_response = get_gemini_response(sentence)
         
         # Send to Angular app (simulation)
-        success = send_to_angular_app(ollama_response)
+        success = send_to_angular_app(gemini_response)
         
         # Try to emit via socket
         try:
             socketio.emit('conversation_update', {
                 'user_sentence': sentence,
-                'response': ollama_response
+                'response': gemini_response
             })
         except Exception as e:
             logger.warning(f"Socket emit failed: {str(e)}")
@@ -417,7 +452,7 @@ def api_send_conversation():
         
         return jsonify({
             'success': True, 
-            'response': ollama_response,
+            'response': gemini_response,
             'user_sentence': sentence
         })
         
@@ -484,16 +519,16 @@ def handle_send_conversation():
         sentence = " ".join(current_sentence)
         logger.info(f"Processing sentence: {sentence}")
         
-        # Get response from Ollama
-        ollama_response = get_ollama_response(sentence)
+        # Get response from Gemini
+        gemini_response = get_gemini_response(sentence)
         
         # Send to Angular app (simulation)
-        success = send_to_angular_app(ollama_response)
+        success = send_to_angular_app(gemini_response)
         
         # Emit the conversation update
         emit('conversation_update', {
             'user_sentence': sentence,
-            'response': ollama_response
+            'response': gemini_response
         })
         
         # Clear the sentence after sending
@@ -509,7 +544,7 @@ def handle_send_conversation():
         except Exception as e:
             logger.warning(f"Failed to clear sentence after conversation: {str(e)}")
         
-        return {'success': True, 'response': ollama_response}
+        return {'success': True, 'response': gemini_response}
         
     except Exception as e:
         logger.error(f"Error in conversation: {str(e)}")
@@ -520,66 +555,145 @@ def check_and_emit_status():
     """Check all services and emit status to clients"""
     sign_app_running = False
     angular_app_running = False
-    ollama_running = False
+    gemini_running = False
     
-    try:
-        # Check sign recognition app with more flexible parsing
-        sign_response = requests.get(f"{SIGN_APP_URL}/test", timeout=3)
-        sign_app_running = sign_response.status_code == 200
-        logger.info(f"Sign app test endpoint returned: {sign_response.text}")
-    except requests.RequestException as e:
-        logger.warning(f"Sign recognition app is not running: {str(e)}")
+    # Try both port 5000 and 5005 for the sign app
+    sign_app_ports = ["http://127.0.0.1:5000", "http://127.0.0.1:5005"]  # Try 5000 first which is the default
+    sign_app_url_used = None
     
-    try:
-        # Check Angular app
-        angular_response = requests.get(f"{ANGULAR_APP_URL}", timeout=2)
-        angular_app_running = angular_response.status_code == 200
-    except requests.RequestException:
-        logger.warning("Angular app is not running")
-    
-    try:
-        # First check if Ollama server is running at all
-        ollama_server_response = requests.get("http://localhost:11434/api/tags", timeout=3)
-        
-        if ollama_server_response.status_code == 200:
-            # Check if our model is available
-            models = ollama_server_response.json().get('models', [])
-            model_available = any(model['name'].startswith(OLLAMA_MODEL) for model in models)
+    # Try each possible port for the sign app with improved error handling
+    for test_url in sign_app_ports:
+        try:
+            # Increase timeout to 5 seconds to give it more time to respond
+            logger.info(f"Checking sign app at {test_url}...")
+            sign_response = requests.get(f"{test_url}/test", timeout=5)
+            logger.info(f"Response from {test_url}: status={sign_response.status_code}, content={sign_response.text[:100]}")
             
-            if model_available:
-                # If model is available, test with a simple query
-                test_response = requests.post(
-                    OLLAMA_URL,
-                    json={
-                        "model": OLLAMA_MODEL,
-                        "prompt": "hello",
-                        "max_tokens": 1
-                    },
-                    timeout=5
-                )
-                ollama_running = test_response.status_code == 200
-                if ollama_running:
-                    logger.info(f"Ollama is running correctly with model {OLLAMA_MODEL}")
+            if sign_response.status_code == 200:
+                sign_app_running = True
+                sign_app_url_used = test_url
+                # Update the global SIGN_APP_URL to use the working port
+                global SIGN_APP_URL
+                SIGN_APP_URL = test_url
+                logger.info(f"✅ Sign app found and running at {test_url} - using this URL")
+                
+                # Try to parse the response as JSON to verify it's really our app
+                try:
+                    data = sign_response.json()
+                    if data.get('success', False):
+                        logger.info(f"Sign app test endpoint confirmed success=true")
+                    else:
+                        logger.info(f"Sign app test endpoint returned success=false, but connection is working")
+                except ValueError:
+                    logger.info(f"Sign app response is not JSON, but connection is working")
+                    
+                break
+        except requests.RequestException as e:
+            logger.warning(f"Sign recognition app not available at {test_url}: {str(e)}")
+        except Exception as e:
+            logger.warning(f"Unexpected error checking sign app at {test_url}: {str(e)}")
+    
+    if not sign_app_running:
+        logger.warning("❌ Sign recognition app is not running on any tested port")
+        # Let's try a simpler check for each port without JSON parsing
+        for test_url in sign_app_ports:
+            try:
+                # Very basic check just to see if something is there
+                simple_response = requests.get(test_url, timeout=2)
+                logger.info(f"Basic check at {test_url}: status={simple_response.status_code}")
+                if simple_response.status_code == 200:
+                    logger.info(f"⚠️ Something is running at {test_url}, but not responding to /test endpoint")
+            except:
+                pass
+    
+    # Check Angular app with multiple URLs and better error handling
+    angular_urls = ["http://127.0.0.1:4200", "http://localhost:4200", "http://0.0.0.0:4200"]
+    global ANGULAR_APP_URL
+    
+    for angular_url in angular_urls:
+        try:
+            logger.info(f"Checking Angular app at {angular_url}...")
+            # Use a shorter timeout for Angular (2 seconds)
+            angular_response = requests.get(angular_url, timeout=3, 
+                                          headers={'Accept': 'text/html', 'User-Agent': 'Mozilla/5.0'})
+            status = angular_response.status_code
+            logger.info(f"Angular app response from {angular_url}: status={status}")
+            
+            # Angular might return various status codes when running
+            if status == 200 or status == 304 or (status >= 300 and status < 400):
+                angular_app_running = True
+                ANGULAR_APP_URL = angular_url
+                logger.info(f"✅ Angular app found at {angular_url}")
+                break
+        except requests.RequestException as e:
+            logger.warning(f"Angular app not available at {angular_url}: {str(e)}")
+        except Exception as e:
+            logger.warning(f"Error checking Angular app at {angular_url}: {str(e)}")
+    
+    if not angular_app_running:
+        # Try a more basic check with HEAD requests (lighter/faster)
+        for angular_url in angular_urls:
+            try:
+                head_response = requests.head(angular_url, timeout=1)
+                if head_response.status_code < 500:  # Any non-server error is promising
+                    logger.info(f"✅ Angular app seems to be running at {angular_url} (HEAD request)")
+                    angular_app_running = True
+                    ANGULAR_APP_URL = angular_url
+                    break
+            except:
+                pass
+                
+        # Last resort - just assume it's running if we can access anything on the port
+        if not angular_app_running:
+            try:
+                import socket
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                result = sock.connect_ex(('127.0.0.1', 4200))
+                sock.close()
+                if result == 0:
+                    logger.info("✅ Port 4200 is open, assuming Angular app is running")
+                    angular_app_running = True
+                    ANGULAR_APP_URL = "http://127.0.0.1:4200"
+            except:
+                pass
+    
+    if not angular_app_running:
+        logger.warning("❌ Angular app not detected on any tested URL")
+    
+    try:
+        # First check if Gemini server is running at all using the test endpoint
+        gemini_server_response = requests.get(GEMINI_STATUS_URL, timeout=3)
+        
+        if gemini_server_response.status_code == 200:
+            # Check if the test endpoint returns success
+            try:
+                data = gemini_server_response.json()
+                gemini_running = data.get('success', False)
+                
+                if gemini_running:
+                    logger.info(f"Gemini is running correctly")
                 else:
-                    logger.warning(f"Ollama API returned status code {test_response.status_code}")
-            else:
-                logger.warning(f"Model {OLLAMA_MODEL} not found. Please run 'ollama pull {OLLAMA_MODEL}'")
+                    logger.warning(f"Gemini service returned success=false")
+            except ValueError:
+                logger.warning("Could not parse JSON from Gemini status response")
+                gemini_running = gemini_server_response.status_code == 200
         else:
-            logger.warning(f"Ollama server returned status code {ollama_server_response.status_code}")
+            logger.warning(f"Gemini server returned status code {gemini_server_response.status_code}")
             
     except requests.ConnectionError:
-        logger.warning("Could not connect to Ollama. Make sure Ollama service is running.")
+        logger.warning("Could not connect to Gemini. Make sure Gemini service is running.")
     except requests.exceptions.ReadTimeout:
-        logger.warning("Ollama request timed out. Service might be overloaded.")
+        logger.warning("Gemini request timed out. Service might be overloaded.")
     except Exception as e:
-        logger.warning(f"Error checking Ollama: {str(e)}")
+        logger.warning(f"Error checking Gemini: {str(e)}")
     
     # Emit status to all clients
     try:
         socketio.emit('status_update', {
             'sign_app_running': sign_app_running,
             'angular_app_running': angular_app_running,
-            'ollama_running': ollama_running
+            'gemini_running': gemini_running
         })
     except Exception as e:
         logger.warning(f"Failed to emit status update: {str(e)}")
@@ -587,7 +701,7 @@ def check_and_emit_status():
     return {
         'sign_app_running': sign_app_running,
         'angular_app_running': angular_app_running,
-        'ollama_running': ollama_running
+        'gemini_running': gemini_running
     }
 
 # Function to clean up processes on shutdown
@@ -605,6 +719,68 @@ def cleanup():
         logger.info("Terminating Angular app...")
         angular_process.terminate()
 
+# Add a function to check and maintain Gemini connection
+def check_gemini_connection():
+    """Function to check and keep the Gemini connection alive with periodic pings"""
+    global last_successful_gemini_request, gemini_connection_check_event
+    gemini_connection_check_event = threading.Event()
+    
+    while True:
+        try:
+            # Check if it's been too long since the last successful request
+            time_since_last_success = time.time() - last_successful_gemini_request
+            
+            # Only ping if it's been more than 60 seconds since last successful request
+            if time_since_last_success > 60:
+                logger.info("Performing periodic Gemini connection check...")
+                
+                # Simple ping to keep Gemini connected
+                response = requests.post(
+                    GEMINI_URL,
+                    json={
+                        "sentence": ["ping"],
+                        "clientId": "default"
+                    },
+                    timeout=5
+                )
+                
+                if response.status_code == 200:
+                    logger.info("Gemini is responsive. Connection maintained.")
+                    last_successful_gemini_request = time.time()
+                else:
+                    logger.warning(f"Gemini returned unexpected status code: {response.status_code}")
+            
+        except requests.exceptions.ConnectionError:
+            logger.error("Cannot connect to Gemini. Service may be down.")
+            
+            # Try to determine if Gemini is actually running using os-specific commands
+            try:
+                # Windows-specific check
+                if os.name == 'nt':
+                    process_check = subprocess.run(["tasklist", "/fi", "imagename eq gemini.exe"], 
+                                                capture_output=True, text=True, check=False)
+                    if "gemini.exe" not in process_check.stdout:
+                        logger.warning("Gemini process not found. Please restart Gemini manually.")
+                else:
+                    # Unix-like OS check
+                    process_check = subprocess.run(["pgrep", "-f", "gemini"], 
+                                                capture_output=True, text=True, check=False)
+                    if not process_check.stdout.strip():
+                        logger.warning("Gemini process not found. Please restart Gemini manually.")
+            except Exception:
+                pass  # Ignore errors in the process check itself
+                
+        except Exception as e:
+            logger.warning(f"Error pinging Gemini: {str(e)}")
+            
+        # Wait for either the normal interval or an immediate check request
+        gemini_connection_check_event.wait(timeout=30)  # Reduced to 30 seconds for more frequent checks
+        gemini_connection_check_event.clear()
+
+# Start the Gemini connection maintenance thread
+gemini_connection_thread = None
+gemini_connection_check_event = None
+
 if __name__ == '__main__':
     try:
         # Create templates directory if it doesn't exist
@@ -615,42 +791,84 @@ if __name__ == '__main__':
         success = True
         
         # Try to start sign recognition app if it's not already running
-        try:
-            sign_response = requests.get(f"{SIGN_APP_URL}/test", timeout=2)
-            sign_running = sign_response.status_code == 200
-            if sign_running:
-                logger.info("Sign recognition app is already running")
-            else:
-                logger.warning("Sign recognition app response unexpected, will try to start it")
-                success = start_sign_recognition() and success
-        except requests.RequestException:
-            logger.info("Sign recognition app not detected, will try to start it")
+        # Check both ports 5000 and 5005
+        sign_running = False
+        sign_app_ports = ["http://127.0.0.1:5000", "http://127.0.0.1:5005"]
+        
+        for test_url in sign_app_ports:
+            try:
+                logger.info(f"Checking for sign app at {test_url}...")
+                sign_response = requests.get(f"{test_url}/test", timeout=5)
+                if sign_response.status_code == 200:
+                    sign_running = True
+                    # Update the URL to use the working port
+                    # We rely on the global declaration already present in check_and_emit_status
+                    SIGN_APP_URL = test_url  
+                    logger.info(f"✅ Sign recognition app is already running at {test_url}")
+                    break
+            except requests.RequestException as e:
+                logger.info(f"Sign app not detected at {test_url}: {str(e)}")
+        
+        if not sign_running:
+            logger.info("Sign recognition app not detected on any port, will try to start it")
             success = start_sign_recognition() and success
+            # Update URL to the default port we expect for the newly started app
+            SIGN_APP_URL = "http://127.0.0.1:5000"  # Default for newly started app
         
         # Try to start Angular app if it's not already running
-        try:
-            angular_response = requests.get(ANGULAR_APP_URL, timeout=2)
-            angular_running = angular_response.status_code == 200
-            if angular_running:
-                logger.info("Angular app is already running")
-            else:
-                logger.warning("Angular app response unexpected, cannot start automatically")
-        except requests.RequestException:
+        angular_running = False
+        angular_urls = ["http://127.0.0.1:4200", "http://localhost:4200", "http://0.0.0.0:4200"]
+        
+        for angular_url in angular_urls:
+            try:
+                logger.info(f"Checking Angular app at {angular_url}...")
+                angular_response = requests.get(angular_url, timeout=3,
+                                             headers={'Accept': 'text/html', 'User-Agent': 'Mozilla/5.0'})
+                status = angular_response.status_code
+                
+                # Angular might return various status codes when running
+                if status == 200 or status == 304 or (status >= 300 and status < 400):
+                    angular_running = True
+                    ANGULAR_APP_URL = angular_url
+                    logger.info(f"✅ Angular app found at {angular_url}")
+                    break
+            except requests.RequestException as e:
+                logger.info(f"Angular app not detected at {angular_url}: {str(e)}")
+                
+        # If we still haven't found it, try a port check
+        if not angular_running:
+            try:
+                import socket
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                result = sock.connect_ex(('127.0.0.1', 4200))
+                sock.close()
+                if result == 0:
+                    logger.info("✅ Port 4200 is open, assuming Angular app is running")
+                    angular_running = True
+                    ANGULAR_APP_URL = "http://127.0.0.1:4200"
+                    
+            except Exception as e:
+                logger.warning(f"Error checking Angular port: {str(e)}")
+        
+        if not angular_running:
             logger.warning("Angular app not detected. Please start it with: cd asl&fslmodel/frontend && ng serve")
         
-        # Check if Ollama is running
+        # Check if Gemini is running and start the connection maintenance thread
         try:
-            response = requests.post(
-                OLLAMA_URL,
-                json={"model": OLLAMA_MODEL, "prompt": "hello", "max_tokens": 1},
-                timeout=5
-            )
-            ollama_running = response.status_code == 200
-            if not ollama_running:
-                logger.warning(f"Ollama service returned status code {response.status_code}. Make sure Ollama is running.")
+            response = requests.get(GEMINI_STATUS_URL, timeout=5)
+            gemini_running = response.status_code == 200
+            if gemini_running:
+                logger.info(f"Gemini is running")
+                # Start the Gemini connection maintenance thread
+                gemini_connection_thread = threading.Thread(target=check_gemini_connection, daemon=True)
+                gemini_connection_thread.start()
+                logger.info("Started Gemini connection maintenance thread")
+            else:
+                logger.warning(f"Gemini service returned status code {response.status_code}. Make sure Gemini is running.")
         except Exception as e:
-            logger.warning(f"Ollama might not be running: {str(e)}")
-            logger.warning(f"Please make sure Ollama is running and the {OLLAMA_MODEL} model is pulled.")
+            logger.warning(f"Gemini might not be running: {str(e)}")
+            logger.warning(f"Please make sure Gemini is running.")
         
         # If services started successfully, start the sentence polling thread
         if success:
@@ -664,7 +882,7 @@ if __name__ == '__main__':
         logger.info("NOTE: Please make sure the following services are running separately:")
         logger.info("1. Sign Recognition App: python app.py (on port 5000)")
         logger.info("2. Angular App: cd asl&fslmodel/frontend && ng serve (on port 4200)")
-        logger.info(f"3. Ollama Service with {OLLAMA_MODEL} model pulled")
+        logger.info(f"3. Gemini Service")
         
         # Run with allow_unsafe_werkzeug=True to support newer Flask versions
         socketio.run(app, host='0.0.0.0', port=5001, debug=True, allow_unsafe_werkzeug=True)

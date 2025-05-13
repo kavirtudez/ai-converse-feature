@@ -860,34 +860,28 @@
         clearBtn.addEventListener('click', () => {
             clearBtn.disabled = true;
             
-            // Send request to server to clear sentence
-            fetch('http://localhost:5000/clear_sentence', {
+            // Use dynamic server URL
+            const serverUrl = window.location.origin;
+            
+            fetch(`${serverUrl}/clear_sentence`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({ clientId: clientId })
+                body: JSON.stringify({
+                    clientId: clientId
+                })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     sentenceText.textContent = translations[currentLanguage].noSigns;
-                    signBadges.innerHTML = '';
+                    updateSignBadges();
                     lastSentence = [];
-                    console.log('Sentence cleared successfully');
-                } else {
-                    console.error('Failed to clear sentence:', data.error);
                 }
-                clearBtn.disabled = false;
             })
-            .catch(error => {
-                console.error('Error clearing sentence:', error);
-                sentenceText.textContent = translations[currentLanguage].noSigns;
-                signBadges.innerHTML = '';
-                lastSentence = [];
-                clearBtn.disabled = false;
-            });
+            .catch(error => console.error('Error clearing sentence:', error));
         });
         
         // Update sign badges based on current language
@@ -1056,13 +1050,15 @@
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     const imageData = canvas.toDataURL('image/jpeg', 0.7);
                     
-                    const response = await fetch('http://localhost:5000/predict', {
+                    // Use dynamic server URL
+                    const serverUrl = window.location.origin;
+                    
+                    const response = await fetch(`${serverUrl}/predict`, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
+                            'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ 
+                        body: JSON.stringify({
                             image: imageData,
                             clientId: clientId,
                             language: currentLanguage
@@ -1164,8 +1160,11 @@
             responseContent.textContent = 'Waiting for response...';
             responseStatus.textContent = 'Processing...';
             
+            // Use the same server URL
+            const serverUrl = window.location.origin;
+            
             // Send the request
-            fetch('http://localhost:5000/send_to_ollama', {
+            fetch(`${serverUrl}/send_to_ollama`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1224,8 +1223,11 @@
         function checkServerStatus() {
             console.log("Checking server status...");
             
-            // Check app.py server
-            fetch('http://localhost:5000/test')
+            // Check app.py server - Use dynamic server URL
+            const serverUrl = window.location.origin;
+            console.log("Using server URL:", serverUrl);
+            
+            fetch(`${serverUrl}/test`)
                 .then(response => response.json())
                 .then(data => {
                     console.log("Sign recognition app status:", data);
@@ -1240,7 +1242,7 @@
             
             // Test a sign directly if needed (for debugging)
             function testSign(sign) {
-                fetch('http://localhost:5000/test_sign', {
+                fetch(`${serverUrl}/test_sign`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

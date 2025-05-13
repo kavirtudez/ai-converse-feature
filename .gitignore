@@ -39,6 +39,8 @@ ENV/
 *.logs
 logs/
 log/
+app_output.log
+app_error.log
 
 # IDE
 .idea/
@@ -74,4 +76,21 @@ htmlcov/
 .pytest_cache/
 
 # Ollama models (potentially large)
-ollama_models/ 
+ollama_models/
+
+# Test files (not essential for the core application)
+test_*.py
+*_test.py
+check_*.py
+convert_model.py
+setup_env.py
+app_test.txt
+test_flask.py
+angular_message.txt
+
+# Old integration (replaced by Gemini)
+integrate_ollama.py
+ollama_handler.py
+start_ollama_service.bat
+start_ollama_service.sh
+README_ollama_integration.md 

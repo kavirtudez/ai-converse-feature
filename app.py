@@ -448,49 +448,49 @@ def notify_conversation_service(client_id, sentence):
         # Don't let notification failures affect the main app
         logger.warning(f"Failed to notify conversation service: {str(e)}")
 
-# Add function to send sentence to Ollama
-def send_to_ollama(client_id, sentence):
-    """Send the current sentence to Ollama via sign_conversation.py"""
+# Add function to send sentence to Gemini instead of Ollama
+def send_to_gemini(client_id, sentence):
+    """Send the current sentence to Gemini"""
     try:
         if not sentence:
-            logger.warning("Cannot send empty sentence to Ollama")
+            logger.warning("Cannot send empty sentence to Gemini")
             return {"success": False, "error": "Empty sentence"}
             
-        logger.info(f"Sending sentence to Ollama: {sentence}")
+        logger.info(f"Sending sentence to Gemini: {sentence}")
         
-        # Call the sign_conversation.py API to send to Ollama
+        # Call the Gemini integration service directly
         response = requests.post(
-            "http://localhost:5001/api/send_conversation",
-            json={"clientId": client_id},
+            "http://localhost:5002/process_sign_sentence",
+            json={"clientId": client_id, "sentence": sentence},
             timeout=5
         )
         
         if response.status_code == 200:
             data = response.json()
             if data.get("success", False):
-                logger.info(f"Successfully sent to Ollama, response: {data.get('response')}")
+                logger.info(f"Successfully sent to Gemini, response: {data.get('response')}")
                 return {"success": True, "response": data.get("response")}
             else:
                 error = data.get("error", "Unknown error")
-                logger.warning(f"Failed to send to Ollama: {error}")
+                logger.warning(f"Failed to send to Gemini: {error}")
                 return {"success": False, "error": error}
         else:
-            logger.warning(f"Failed to send to Ollama, status code: {response.status_code}")
+            logger.warning(f"Failed to send to Gemini, status code: {response.status_code}")
             return {"success": False, "error": f"Status code: {response.status_code}"}
             
     except Exception as e:
-        logger.error(f"Error sending to Ollama: {str(e)}")
+        logger.error(f"Error sending to Gemini: {str(e)}")
         return {"success": False, "error": str(e)}
 
-# Add new route for sending to Ollama
-@app.route('/send_to_ollama', methods=['POST'])
-def api_send_to_ollama():
-    """API endpoint to send the current sentence to Ollama"""
+# Add new route for sending to Gemini
+@app.route('/send_to_gemini', methods=['POST'])
+def api_send_to_gemini():
+    """API endpoint to send the current sentence to Gemini"""
     client_id = request.json.get('clientId', 'default')
     
     if client_id in sequence_buffer:
         sentence = list(sequence_buffer[client_id]['sentence'])
-        result = send_to_ollama(client_id, sentence)
+        result = send_to_gemini(client_id, sentence)
         
         if result["success"]:
             return jsonify({
@@ -508,6 +508,13 @@ def api_send_to_ollama():
         "success": False,
         "error": "Client ID not found"
     }), 404
+
+# Keep the old function for compatibility, but forward to the new implementation
+@app.route('/send_to_ollama', methods=['POST'])
+def api_send_to_ollama():
+    """Legacy API endpoint to send the current sentence to Ollama (now forwards to Gemini)"""
+    logger.info("Received request to old Ollama endpoint, forwarding to Gemini")
+    return api_send_to_gemini()
 
 @app.route('/')
 def home():
@@ -635,7 +642,7 @@ def predict():
                         
                         # Notify conversation service of updated sentence
                         notify_conversation_service(client_id, list(sequence_buffer[client_id]['sentence']))
-                
+                        
                 # Check if we have consistent predictions
                 elif len(sequence_buffer[client_id]['predictions']) >= 3:  # Reduced from 5 for even faster detection
                     # Use a majority vote from recent predictions
@@ -822,4 +829,12 @@ def test_sign():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000, host='0.0.0.0', threaded=True) 
+    # Display clear message about which port we're using
+    port = 5000
+    print(f"\n{'='*50}")
+    print(f"STARTING SIGN RECOGNITION APP ON PORT {port}")
+    print(f"Access the app at: http://127.0.0.1:{port}")
+    print(f"{'='*50}\n")
+    
+    # Run the app on the specified port - explicitly set host to 0.0.0.0
+    app.run(debug=True, port=port, host='0.0.0.0', threaded=True) 

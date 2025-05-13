@@ -422,8 +422,8 @@
                     <span>Sign Animation</span>
                 </div>
                 <div class="status-item">
-                    <span class="status-indicator" id="ollama-status"></span>
-                    <span>Ollama AI</span>
+                    <span class="status-indicator" id="gemini-status"></span>
+                    <span>Gemini API</span>
                 </div>
             </div>
             <div>
@@ -442,7 +442,7 @@
                         <span>Clear Sentence</span>
                     </button>
                     <button id="send-btn" class="primary">
-                        <span>Send to AI</span>
+                        <span>Send to Gemini</span>
                     </button>
                 </div>
             </div>
@@ -460,8 +460,8 @@
                 <li>Use the <b>Sign Recognition</b> (left) to make sign language gestures</li>
                 <li>Supported signs: 'hello', 'thanks', 'iloveyou'</li>
                 <li>Your sign sentence will automatically update in real-time</li>
-                <li>When ready, click <b>Send to AI</b> to get a response</li>
-                <li>Copy the AI response and paste it into the Sign Animation (right) input field</li>
+                <li>When ready, click <b>Send to Gemini</b> to get a response</li>
+                <li>Copy the Gemini response and paste it into the Sign Animation (right) input field</li>
                 <li>The Sign Animation will show the response in sign language</li>
             </ol>
         </div>
@@ -480,7 +480,7 @@
             <div class="app-frame">
                 <div class="app-header">
                     <span>Sign Animation (Output)</span>
-                    <small>Paste AI responses here</small>
+                    <small>Paste Gemini responses here</small>
                 </div>
                 <div class="frame-container">
                     <iframe src="http://localhost:4200" id="angular-app-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
@@ -521,7 +521,7 @@
             
             const signAppStatus = document.getElementById('sign-app-status');
             const angularAppStatus = document.getElementById('angular-app-status');
-            const ollamaStatus = document.getElementById('ollama-status');
+            const geminiStatus = document.getElementById('gemini-status');
             const connectionIndicator = document.getElementById('connection-indicator');
             const connectionText = document.getElementById('connection-text');
             
@@ -593,7 +593,7 @@
                 // Update status indicators to show disconnected state
                 updateStatusIndicator(signAppStatus, false);
                 updateStatusIndicator(angularAppStatus, false);
-                updateStatusIndicator(ollamaStatus, false);
+                updateStatusIndicator(geminiStatus, false);
                 
                 // Fall back to direct API
                 startDirectApiPolling();
@@ -615,13 +615,13 @@
             });
             
             socket.on('status_update', function(data) {
-                debugLog(`Status update: Sign app: ${data.sign_app_running}, Angular app: ${data.angular_app_running}, Ollama: ${data.ollama_running}`);
+                debugLog(`Status update: Sign app: ${data.sign_app_running}, Angular app: ${data.angular_app_running}, Gemini: ${data.gemini_running}`);
                 updateStatusIndicator(signAppStatus, data.sign_app_running);
                 updateStatusIndicator(angularAppStatus, data.angular_app_running);
-                updateStatusIndicator(ollamaStatus, data.ollama_running);
+                updateStatusIndicator(geminiStatus, data.gemini_running);
                 
                 // Enable/disable buttons based on status
-                const allRunning = data.sign_app_running && data.angular_app_running && data.ollama_running;
+                const allRunning = data.sign_app_running && data.angular_app_running && data.gemini_running;
                 const signRunning = data.sign_app_running;
                 
                 sendBtn.disabled = !allRunning;
@@ -651,7 +651,7 @@
                     fetch('/api/status')
                         .then(response => response.json())
                         .then(data => {
-                            sendBtn.disabled = !(data.sign_app_running && data.angular_app_running && data.ollama_running);
+                            sendBtn.disabled = !(data.sign_app_running && data.angular_app_running && data.gemini_running);
                         })
                         .catch(() => {
                             // If we can't check status, enable anyway if we have a sentence
@@ -666,7 +666,7 @@
             });
             
             socket.on('conversation_update', function(data) {
-                debugLog(`Conversation update: User said "${data.user_sentence}", AI responded "${data.response}"`);
+                debugLog(`Conversation update: User said "${data.user_sentence}", Gemini responded "${data.response}"`);
                 addMessageToHistory(data.user_sentence, 'user');
                 addMessageToHistory(data.response, 'bot', true);
             });
@@ -748,9 +748,9 @@
                     .then(data => {
                         updateStatusIndicator(signAppStatus, data.sign_app_running);
                         updateStatusIndicator(angularAppStatus, data.angular_app_running);
-                        updateStatusIndicator(ollamaStatus, data.ollama_running);
+                        updateStatusIndicator(geminiStatus, data.gemini_running);
                         
-                        const allRunning = data.sign_app_running && data.angular_app_running && data.ollama_running;
+                        const allRunning = data.sign_app_running && data.angular_app_running && data.gemini_running;
                         const signRunning = data.sign_app_running;
                         
                         sendBtn.disabled = !allRunning;
@@ -789,11 +789,11 @@
                         // Animate the border to show update
                         flashSentenceBox();
                         
-                        // Only enable send if we know Ollama is running
+                        // Only enable send if we know Gemini is running
                         fetch('/api/status')
                             .then(response => response.json())
                             .then(data => {
-                                sendBtn.disabled = !(data.sign_app_running && data.angular_app_running && data.ollama_running);
+                                sendBtn.disabled = !(data.sign_app_running && data.angular_app_running && data.gemini_running);
                                 
                                 // Automatically scroll the debug log to show the update
                                 debugContent.scrollTop = debugContent.scrollHeight;
@@ -816,7 +816,7 @@
                 // Disable the send button during processing
                 sendBtn.disabled = true;
                 sendBtn.innerHTML = '<span class="loading"></span> Processing...';
-                debugLog('Sending conversation to AI');
+                debugLog('Sending conversation to Gemini');
                 
                 // Try using direct API instead of socket
                 if (socketConnected) {
@@ -829,7 +829,7 @@
                         // Re-enable the send button
                         setTimeout(function() {
                             sendBtn.disabled = false;
-                            sendBtn.innerHTML = '<span>Send to AI</span>';
+                            sendBtn.innerHTML = '<span>Send to Gemini</span>';
                         }, 500);
                     });
                 } else {
@@ -855,7 +855,7 @@
                         // Re-enable the send button
                         setTimeout(function() {
                             sendBtn.disabled = false;
-                            sendBtn.innerHTML = '<span>Send to AI</span>';
+                            sendBtn.innerHTML = '<span>Send to Gemini</span>';
                         }, 500);
                     })
                     .catch(error => {
@@ -865,7 +865,7 @@
                         // Re-enable the send button
                         setTimeout(function() {
                             sendBtn.disabled = false;
-                            sendBtn.innerHTML = '<span>Send to AI</span>';
+                            sendBtn.innerHTML = '<span>Send to Gemini</span>';
                         }, 500);
                     });
                 }
