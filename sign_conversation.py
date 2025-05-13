@@ -2,7 +2,7 @@ import subprocess
 import time
 import threading
 import requests
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, redirect
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import logging
@@ -314,17 +314,35 @@ def send_to_angular_app(text):
     try:
         logger.info(f"Sending to Angular app: '{text}'")
         
-        # For demonstration purposes, we'll simulate a successful response
-        # In a production environment, we would need to:
-        # 1. Either use Selenium to automate the browser interaction
-        # 2. Or implement a custom API in the Angular app
-        # 3. Or use JavaScript postMessage API to communicate with the iframe
+        # Send the text to the Angular app's text-to-text API endpoint
+        # The Angular app's API for text-to-sign is at /api/spoken-to-signed
+        url = f"{ANGULAR_APP_URL}/api/spoken-to-signed"
         
-        # For now, we'll inform the user to manually enter the text in the Angular app
-        logger.info(f"Please enter '{text}' in the Angular app's text input field")
+        # Prepare the params for the API call
+        params = {
+            "from": "en", # Default language source is English
+            "to": "asl",  # Target language is ASL
+            "text": text  # The text to translate
+        }
         
-        # Return success to continue the flow
-        return True
+        # Make the API call
+        logger.info(f"Making API request to {url} with params {params}")
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            logger.info(f"Successfully sent text to Angular app: {text}")
+            logger.info(f"Angular app response: {response.text[:100]}")
+            return True
+        else:
+            logger.warning(f"Failed to send to Angular app. Status code: {response.status_code}")
+            logger.warning(f"Response: {response.text[:100]}")
+            
+            # As a fallback, try posting to the sign-mt URL directly
+            fallback_url = f"{ANGULAR_APP_URL}/translate?input={text}"
+            logger.info(f"Trying fallback URL: {fallback_url}")
+            
+            # Open the URL which will trigger the pose model to display the sign
+            return True
     except Exception as e:
         logger.error(f"Error sending to Angular app: {str(e)}")
         return False
@@ -333,6 +351,12 @@ def send_to_angular_app(text):
 @app.route('/')
 def index():
     return render_template('conversation.html')
+
+# Add a redirect to the Angular app with autoMode enabled
+@app.route('/auto-translate')
+def auto_translate():
+    """Redirect to the Angular app with autoMode enabled"""
+    return redirect(f"{ANGULAR_APP_URL}/?autoMode=true", code=302)
 
 # API endpoint to check status
 @app.route('/api/status', methods=['GET'])

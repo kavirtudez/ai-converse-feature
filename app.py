@@ -13,6 +13,7 @@ import threading
 import queue
 import time
 import requests
+from urllib.parse import quote
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -448,6 +449,109 @@ def notify_conversation_service(client_id, sentence):
         # Don't let notification failures affect the main app
         logger.warning(f"Failed to notify conversation service: {str(e)}")
 
+# Redirect route to handle text parameter
+@app.route('/redirect')
+def redirect_to_angular():
+    text = request.args.get('text', '')
+    if not text:
+        return render_template('redirect.html')
+    
+    logger.info(f"Redirecting to Angular with text: {text}")
+    return render_template('redirect.html', text=text)
+
+# Direct HTML route for displaying the Angular app in an embedded view
+@app.route('/show-translation')
+def show_translation():
+    text = request.args.get('text', '')
+    if not text:
+        return "No text provided", 400
+    
+    # Create a minimal HTML page that directly embeds the Angular app
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Sign Language Translation</title>
+        <meta charset="UTF-8">
+        <style>
+            body, html {{
+                margin: 0;
+                padding: 0;
+                height: 100%;
+                overflow: hidden;
+            }}
+            iframe {{
+                width: 100%;
+                height: 100%;
+                border: none;
+            }}
+            .overlay {{
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                background-color: rgba(0,0,0,0.7);
+                color: white;
+                padding: 10px;
+                border-radius: 5px;
+                font-family: Arial, sans-serif;
+                z-index: 1000;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="overlay">Translating: "{text}"</div>
+        <iframe src="http://127.0.0.1:4200/?input={quote(text)}" allowfullscreen></iframe>
+    </body>
+    </html>
+    """
+    return html
+
+# Update forward_to_angular function to also try our new direct HTML approach
+def forward_to_angular(text):
+    """Send text directly to the Angular app for sign language translation"""
+    try:
+        if not text:
+            logger.warning("Cannot send empty text to Angular app")
+            return False
+            
+        logger.info(f"Forwarding text to Angular app: {text}")
+        
+        try:
+            # Approach 1: Try to use webbrowser module to open our direct HTML route
+            # This avoids CORS issues by showing the Angular app within our own HTML
+            server_url = request.url_root.rstrip('/')
+            html_url = f"{server_url}/show-translation?text={quote(text)}"
+            logger.info(f"Opening direct HTML route: {html_url}")
+            
+            import webbrowser
+            success = webbrowser.open(html_url)
+            
+            if success:
+                logger.info("Successfully opened browser with direct HTML route")
+                return True
+            
+            # Fallback to redirect page if the direct approach fails
+            redirect_url = f"{server_url}/redirect?text={quote(text)}"
+            logger.info(f"Trying redirect page: {redirect_url}")
+            
+            success = webbrowser.open(redirect_url)
+            if success:
+                logger.info("Successfully opened redirect page")
+                return True
+            
+            # Last resort: use requests to trigger the page load
+            logger.warning("Browser open failed, using requests approach")
+            response = requests.get(html_url, timeout=5)
+            logger.info(f"Made request to show-translation page, status: {response.status_code}")
+            return response.status_code == 200
+            
+        except Exception as e:
+            logger.error(f"Error forwarding to Angular app: {str(e)}")
+            return False
+    except Exception as e:
+        logger.error(f"Error in forward_to_angular: {str(e)}")
+        return False
+
 # Add function to send sentence to Gemini instead of Ollama
 def send_to_gemini(client_id, sentence):
     """Send the current sentence to Gemini"""
@@ -460,7 +564,7 @@ def send_to_gemini(client_id, sentence):
         
         # Call the Gemini integration service directly
         response = requests.post(
-            "http://localhost:5002/process_sign_sentence",
+            "http://127.0.0.1:5002/process_sign_sentence",
             json={"clientId": client_id, "sentence": sentence},
             timeout=5
         )
@@ -468,8 +572,14 @@ def send_to_gemini(client_id, sentence):
         if response.status_code == 200:
             data = response.json()
             if data.get("success", False):
-                logger.info(f"Successfully sent to Gemini, response: {data.get('response')}")
-                return {"success": True, "response": data.get("response")}
+                gemini_response = data.get("response")
+                logger.info(f"Successfully sent to Gemini, response: {gemini_response}")
+                
+                # Automatically forward Gemini's response to the Angular app
+                forward_success = forward_to_angular(gemini_response)
+                logger.info(f"Auto-forwarded to Angular app: {forward_success}")
+                
+                return {"success": True, "response": gemini_response, "forwarded": forward_success}
             else:
                 error = data.get("error", "Unknown error")
                 logger.warning(f"Failed to send to Gemini: {error}")

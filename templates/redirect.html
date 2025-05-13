@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Redirect to Sign Language Translator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #4285f4;
+    }
+    .message {
+      margin: 20px 0;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .text-display {
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #f0f8ff;
+      border-radius: 8px;
+      text-align: left;
+      font-size: 18px;
+      border-left: 4px solid #4285f4;
+    }
+    .countdown {
+      font-size: 24px;
+      font-weight: bold;
+      margin: 20px 0;
+      color: #4285f4;
+    }
+    .redirect-button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .redirect-button:hover {
+      background-color: #3367d6;
+    }
+  </style>
+  <script>
+    window.onload = function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const text = urlParams.get('text');
+      
+      if (!text) {
+        document.getElementById('message').textContent = 'No text parameter provided.';
+        document.getElementById('text-display').style.display = 'none';
+        document.getElementById('countdown-container').style.display = 'none';
+        return;
+      }
+      
+      // Display the text
+      document.getElementById('text-display').textContent = text;
+      
+      // Set up countdown
+      let countdown = 3;
+      document.getElementById('countdown').textContent = countdown;
+      
+      // Update countdown every second
+      const countdownInterval = setInterval(function() {
+        countdown--;
+        document.getElementById('countdown').textContent = countdown;
+        
+        if (countdown <= 0) {
+          clearInterval(countdownInterval);
+          redirectToAngularApp(text);
+        }
+      }, 1000);
+      
+      // Set up redirect button
+      document.getElementById('redirect-button').addEventListener('click', function() {
+        clearInterval(countdownInterval);
+        redirectToAngularApp(text);
+      });
+    };
+    
+    function redirectToAngularApp(text) {
+      // Open in a new tab instead of redirecting the current page
+      // This is more reliable and avoids cross-origin issues
+      const url = 'http://127.0.0.1:4200/?input=' + encodeURIComponent(text);
+      window.open(url, '_blank');
+      
+      // Show success message instead of leaving this page
+      document.getElementById('countdown-container').innerHTML = 
+        '<div class="success-message">Sign language translation opened in a new tab. ' +
+        'If nothing happened, please <a href="' + url + '" target="_blank">click here</a>.</div>';
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>Sign Language Translator</h1>
+    <div class="message" id="message">
+      Redirecting to the sign language translator with this text:
+    </div>
+    <div class="text-display" id="text-display"></div>
+    <div id="countdown-container">
+      <div>Redirecting in <span id="countdown">3</span> seconds...</div>
+      <p>or</p>
+      <button id="redirect-button" class="redirect-button">Redirect Now</button>
+    </div>
+  </div>
+</body>
+</html> 

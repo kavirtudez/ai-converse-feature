@@ -1164,7 +1164,7 @@
             const serverUrl = window.location.origin;
             
             // Send the request
-            fetch(`${serverUrl}/send_to_ollama`, {
+            fetch(`${serverUrl}/send_to_gemini`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1187,8 +1187,35 @@
                 
                 if (data.success) {
                     responseContent.textContent = data.response;
-                    responseStatus.textContent = 'Response received successfully.';
-                    responseStatus.style.color = 'var(--success-color)';
+                    const responseText = data.response; // Gemini's response text
+                    
+                    // Send the response to the parent window (conversation.html)
+                    if (parent && parent !== window && typeof parent.postMessage === 'function') {
+                        try {
+                            parent.postMessage({ type: 'geminiResponse', data: responseText }, 'http://127.0.0.1:5001');
+                            responseStatus.textContent = 'Response received and sent to conversation orchestrator.';
+                            responseStatus.style.color = 'var(--success-color)';
+                            console.log("Successfully posted geminiResponse to parent (conversation.html).");
+                        } catch (e) {
+                            console.error("Error posting message to parent (conversation.html):", e);
+                            responseStatus.innerHTML = `
+                                Response received. Could not send to conversation orchestrator.
+                                <button onclick="manualSendToAngular(\'${responseText}\')" class="btn btn-primary" style="margin-top: 10px; display: block;">
+                                    Try Sending to Sign Animator Manually
+                                </button>`;
+                            responseStatus.style.color = 'var(--warning-color)';
+                        }
+                    } else {
+                        console.warn("Not in an iframe or parent.postMessage not available. Displaying locally.");
+                        // If not in an iframe, or parent communication is not set up as expected,
+                        // provide a manual option directly to Angular as a last resort.
+                        responseStatus.innerHTML = `
+                            Response received. Cannot auto-forward from this context.
+                            <button onclick="manualSendToAngular(\'${responseText}\')" class="btn btn-primary" style="margin-top: 10px; display: block;">
+                                Manually Open with Sign Animator
+                            </button>`;
+                        responseStatus.style.color = 'var(--warning-color)';
+                    }
                     
                     // Add animation to highlight the new response
                     responseContent.classList.add('highlight-response');
@@ -1197,7 +1224,7 @@
                     }, 1500);
                 } else {
                     responseContent.textContent = 'Error: ' + (data.error || 'Unknown error');
-                    responseStatus.textContent = 'Failed to get response.';
+                    responseStatus.textContent = 'Failed to get response from AI.';
                     responseStatus.style.color = 'var(--danger-color)';
                 }
             })
@@ -1205,11 +1232,36 @@
                 sendBtn.disabled = false;
                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to AI';
                 
-                console.error('Error:', error);
+                console.error('Error sending to AI:', error);
                 responseContent.textContent = 'Error: ' + error.message;
-                responseStatus.textContent = 'Failed to communicate with server.';
+                responseStatus.textContent = 'Failed to communicate with AI server.';
                 responseStatus.style.color = 'var(--danger-color)';
             });
+        }
+
+        // Manual send function for fallback button
+        function manualSendToAngular(text) {
+            // Try to postMessage directly to Angular (if it happens to be a sibling or accessible under a known ID)
+            // This is a long shot in many complex iframe setups but can be a fallback.
+            const angularIframe = parent.document.getElementById('angular-app-frame'); // Attempt to find it via parent, might fail.
+            let sentDirectly = false;
+            if (angularIframe && angularIframe.contentWindow) {
+                try {
+                    angularIframe.contentWindow.postMessage(text, 'http://localhost:4200'); // TARGET ANGULAR AT LOCALHOST
+                    alert('Attempted to send text directly to Sign Animator iframe!');
+                    sentDirectly = true;
+                } catch (e) {
+                    console.warn('Manual direct postMessage to Angular iframe failed:', e.message);
+                    alert('Failed to send text directly to Sign Animator iframe. See console for details.');
+                }
+            }
+            
+            if (!sentDirectly) {
+                 // If direct postMessage failed, alert the user that manual opening is no longer supported or guide them differently.
+                 console.log('Direct postMessage to Angular iframe was not successful. Automatic redirection to new tab is disabled.');
+                 alert('Could not automatically send text to the Sign Animator. Please ensure it is running correctly in the other panel.');
+                 // window.open(`http://localhost:4200/?input=${encodeURIComponent(text)}`, '_blank'); // REMOVED to prevent new tab
+            }
         }
         
         // Add event listener to the send button
