@@ -76,7 +76,7 @@ htmlcov/
 .pytest_cache/
 
 # Ollama models (potentially large)
-ollama_models/
+ollama_models/ 
 
 # Test files (not essential for the core application)
 test_*.py

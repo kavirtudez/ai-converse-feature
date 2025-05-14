@@ -254,10 +254,10 @@ class GeminiHandler:
     def _get_fallback_response(self):
         """Return a fallback response when processing fails"""
         fallbacks = [
-            "I understand you",
-            "Please continue signing",
-            "I hear you",
-            "Can you repeat that",
+            "That is great",
+            "Good",
+            "That's great!",
+            "Hello Friend",
             "Let me help you",
             "Hello there",
             "Thank you",

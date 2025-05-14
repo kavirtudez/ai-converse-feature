@@ -107,31 +107,31 @@ def poll_sign_app_for_sentence():
                     logger.info(f"Polling for sentence at {url}")
                     
                     response = requests.get(url, timeout=5)  # Increased timeout from 3 to 5 seconds
-                    logger.info(f"Received response from sign app: Status {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        try:
-                            data = response.json()
-                            logger.info(f"Parsed response data: {data}")
-                            
-                            if data.get('success', False):
-                                new_sentence = data.get('sentence', [])
-                                # Only emit if there's a change
-                                if new_sentence != current_sentence:
-                                    current_sentence = new_sentence
-                                    last_update_time = time.time()
-                                    logger.info(f"Sentence updated: {current_sentence}")
-                                    try:
-                                        # Force emit via socket
-                                        socketio.emit('sentence_update', {'sentence': current_sentence})
-                                        # Also immediately try to send a REST API update for clients using direct API
-                                        socketio.sleep(0)  # Allow emit to process
-                                    except Exception as e:
-                                        logger.error(f"Error emitting sentence update: {str(e)}")
-                        except ValueError as e:
-                            logger.error(f"Error parsing JSON response: {str(e)}, Response: {response.text}")
-                    else:
-                        logger.warning(f"Failed to get sentence, status code: {response.status_code}, Response: {response.text}")
+                logger.info(f"Received response from sign app: Status {response.status_code}")
+                
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                        logger.info(f"Parsed response data: {data}")
+                        
+                        if data.get('success', False):
+                            new_sentence = data.get('sentence', [])
+                            # Only emit if there's a change
+                            if new_sentence != current_sentence:
+                                current_sentence = new_sentence
+                                last_update_time = time.time()
+                                logger.info(f"Sentence updated: {current_sentence}")
+                                try:
+                                    # Force emit via socket
+                                    socketio.emit('sentence_update', {'sentence': current_sentence})
+                                    # Also immediately try to send a REST API update for clients using direct API
+                                    socketio.sleep(0)  # Allow emit to process
+                                except Exception as e:
+                                    logger.error(f"Error emitting sentence update: {str(e)}")
+                    except ValueError as e:
+                        logger.error(f"Error parsing JSON response: {str(e)}, Response: {response.text}")
+                else:
+                    logger.warning(f"Failed to get sentence, status code: {response.status_code}, Response: {response.text}")
                 except requests.ConnectionError as e:
                     logger.warning(f"Connection error to sign app: {str(e)}")
                 except requests.Timeout as e:
@@ -340,9 +340,9 @@ def send_to_angular_app(text):
             # As a fallback, try posting to the sign-mt URL directly
             fallback_url = f"{ANGULAR_APP_URL}/translate?input={text}"
             logger.info(f"Trying fallback URL: {fallback_url}")
-            
+        
             # Open the URL which will trigger the pose model to display the sign
-            return True
+        return True
     except Exception as e:
         logger.error(f"Error sending to Angular app: {str(e)}")
         return False
@@ -820,7 +820,7 @@ if __name__ == '__main__':
         sign_app_ports = ["http://127.0.0.1:5000", "http://127.0.0.1:5005"]
         
         for test_url in sign_app_ports:
-            try:
+        try:
                 logger.info(f"Checking for sign app at {test_url}...")
                 sign_response = requests.get(f"{test_url}/test", timeout=5)
                 if sign_response.status_code == 200:

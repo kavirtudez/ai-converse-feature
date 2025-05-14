@@ -667,6 +667,15 @@
         const enBtn = document.getElementById('en-btn');
         const tlBtn = document.getElementById('tl-btn');
         
+        // Global DOM elements for response card - ensure they are defined early
+        const responseCard = document.querySelector('.response-card');
+        const responseContent = document.getElementById('responseContent');
+        const responseStatus = document.getElementById('responseStatus');
+        const toggleResponseBtn = document.getElementById('toggleResponseBtn'); 
+        
+        let originalGeminiResponse = ''; // To store the original English AI response
+        let aiResponseVisible = true; // For the toggle button logic
+        
         // Sign info elements
         const helloInfo = document.getElementById('hello-info');
         const thanksInfo = document.getElementById('thanks-info');
@@ -776,69 +785,86 @@
 
         // Update UI language
         function updateLanguage(lang) {
-            const texts = translations[lang];
+            // Always use English for the main UI text elements
+            const uiTexts = translations.english;
+            currentLanguage = lang; // Still set currentLanguage for AI response logic
             
-            subtitle.textContent = texts.subtitle;
-            predictionTitle.textContent = texts.predictionTitle;
-            sentenceTitle.textContent = texts.sentenceTitle;
-            tipsTitle.textContent = texts.tipsTitle;
-            clearText.textContent = texts.clearText;
-            helloLabel.textContent = texts.hello;
-            thanksLabel.textContent = texts.thanks;
-            iloveyouLabel.textContent = texts.iloveyou;
-            helloDesc.textContent = texts.helloDesc;
-            thanksDesc.textContent = texts.thanksDesc;
-            iloveyouDesc.textContent = texts.iloveyouDesc;
+            subtitle.textContent = uiTexts.subtitle;
+            predictionTitle.textContent = uiTexts.predictionTitle;
+            sentenceTitle.textContent = uiTexts.sentenceTitle;
+            tipsTitle.textContent = uiTexts.tipsTitle;
+            clearText.textContent = uiTexts.clearText;
+            helloLabel.textContent = uiTexts.hello;
+            thanksLabel.textContent = uiTexts.thanks;
+            iloveyouLabel.textContent = uiTexts.iloveyou;
+            helloDesc.textContent = uiTexts.helloDesc;
+            thanksDesc.textContent = uiTexts.thanksDesc;
+            iloveyouDesc.textContent = uiTexts.iloveyouDesc;
             
-            if (sentenceText.textContent === 'No signs detected yet' || 
-                sentenceText.textContent === 'Wala pang nakilalang senyas') {
-                sentenceText.textContent = texts.noSigns;
+            // Update status and sentence text based on current state, but using English templates
+            if (sentenceText.textContent === translations.tagalog.noSigns || sentenceText.textContent === translations.english.noSigns) {
+                sentenceText.textContent = uiTexts.noSigns;
             }
-            
-            if (statusText.textContent.includes('Place your hands') || 
-                statusText.textContent.includes('Ilagay ang iyong') ||
-                statusText.textContent.includes('Move your hands') ||
-                statusText.textContent.includes('Igalaw ang iyong')) {
-                statusText.textContent = texts.waitingHands;
-            } else if (statusText.textContent.includes('Collecting frames') || 
-                       statusText.textContent.includes('Nangongolekta ng frames')) {
+            if (statusText.textContent.includes(translations.tagalog.waitingHands.split(' ')[0]) || 
+                statusText.textContent.includes(translations.english.waitingHands.split(' ')[0])) {
+                statusText.textContent = uiTexts.waitingHands;
+            } else if (statusText.textContent.includes(translations.tagalog.collectingFrames.split(':')[0]) || 
+                       statusText.textContent.includes(translations.english.collectingFrames.split(':')[0])) {
                 const frames = statusText.textContent.match(/\d+\/\d+/);
                 if (frames) {
-                    statusText.textContent = `${texts.collectingFrames}: ${frames[0]}`;
+                    statusText.textContent = `${uiTexts.collectingFrames}: ${frames[0]}`;
                 }
             }
+            // Sign info elements should also remain English
+            document.getElementById('hello-info-title').textContent = uiTexts.helloInfoTitle;
+            document.getElementById('hello-info-desc').textContent = uiTexts.helloInfoDesc;
+            document.getElementById('hello-hint').textContent = uiTexts.helloHint;
+            document.getElementById('thanks-info-title').textContent = uiTexts.thanksInfoTitle;
+            document.getElementById('thanks-info-desc').textContent = uiTexts.thanksInfoDesc;
+            document.getElementById('thanks-hint').textContent = uiTexts.thanksHint;
+            document.getElementById('iloveyou-info-title').textContent = uiTexts.iloveyouInfoTitle;
+            document.getElementById('iloveyou-info-desc').textContent = uiTexts.iloveyouInfoDesc;
+            document.getElementById('iloveyou-hint').textContent = uiTexts.iloveyouHint;
+
             
-            // Update active button styling
+            // Update active button styling for the AI response language
             if (lang === 'english') {
                 enBtn.classList.add('active');
                 tlBtn.classList.remove('active');
-            } else {
+                // If an AI response exists, display its original English version and postMessage it
+                if (originalGeminiResponse && responseCard && responseCard.style.display === 'block') { 
+                    if(responseContent) responseContent.textContent = originalGeminiResponse;
+                    if (parent && parent !== window && typeof parent.postMessage === 'function') {
+                        try {
+                            parent.postMessage({ type: 'geminiResponse', data: originalGeminiResponse }, 'http://127.0.0.1:5001');
+                            console.log("AI Response Language set to English: Posted original Gemini response to parent.");
+                        } catch (e) {
+                            console.error("Error posting message to parent (conversation.html) on lang switch to English:", e);
+                        }
+                    }
+                }
+            } else { // Tagalog mode for AI Response
                 tlBtn.classList.add('active');
                 enBtn.classList.remove('active');
+                // If an AI response exists, translate it to Tagalog and postMessage it
+                if (originalGeminiResponse && responseCard && responseCard.style.display === 'block') { 
+                    translateAndDisplayResponse(originalGeminiResponse, true); // true to indicate it's a language switch context
+                }
             }
             
-            // Update displayed badges to match current language
+            // Update displayed sign badges (these might still use currentLanguage if their content changes, e.g. hello vs kamusta)
             updateSignBadges();
             
-            // Update sign type text
+            // Update sign type text (this is dynamic based on prediction, so it will use the active currentLanguage for its text)
+            // This part of your code already checks `signTypes[predictionText.textContent]`
+            // and then `translations[currentLanguage][type + 'Sign']`
+            // We need to decide if 'Dynamic'/'Static' text should also be always English.
+            // For now, let's make it always English for consistency with other UI elements.
             if (predictionText.textContent in signTypes) {
                 const type = signTypes[predictionText.textContent];
-                signType.textContent = texts[type + 'Sign'];
+                signType.textContent = translations.english[type + 'Sign']; // Always use English for Static/Dynamic type label
                 signType.className = `sign-type-indicator sign-type-${type}`;
             }
-            
-            // Update sign info elements
-            document.getElementById('hello-info-title').textContent = texts.helloInfoTitle;
-            document.getElementById('hello-info-desc').textContent = texts.helloInfoDesc;
-            document.getElementById('hello-hint').textContent = texts.helloHint;
-            
-            document.getElementById('thanks-info-title').textContent = texts.thanksInfoTitle;
-            document.getElementById('thanks-info-desc').textContent = texts.thanksInfoDesc;
-            document.getElementById('thanks-hint').textContent = texts.thanksHint;
-            
-            document.getElementById('iloveyou-info-title').textContent = texts.iloveyouInfoTitle;
-            document.getElementById('iloveyou-info-desc').textContent = texts.iloveyouInfoDesc;
-            document.getElementById('iloveyou-hint').textContent = texts.iloveyouHint;
         }
         
         // Language button event listeners
@@ -1147,6 +1173,62 @@
             requestAnimationFrame(processFrame);
         }
 
+        // Add function to translate text using the backend
+        async function translateText(text, sourceLang, targetLang) {
+            try {
+                const response = await fetch('http://localhost:5003/translate', { // Port 5003
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        source: sourceLang,
+                        target: targetLang
+                    })
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+                }
+                const data = await response.json();
+                return data.translatedText;
+            } catch (error) {
+                console.error('Translation error:', error);
+                // Fallback to original text if translation fails
+                if(responseStatus) {
+                    responseStatus.textContent = `Translation failed: ${error.message}. Displaying original.`;
+                    responseStatus.style.color = 'var(--warning-color)';
+                }
+                return text; 
+            }
+        }
+
+        // New function to handle translation and display
+        async function translateAndDisplayResponse(englishResponse, isLanguageSwitch = false) {
+            const translatedText = await translateText(englishResponse, 'en', 'tl');
+            
+            if (responseContent) responseContent.textContent = translatedText;
+            // Update status text only if it's a new response being translated, not just a language switch
+            if (!isLanguageSwitch && responseStatus) { 
+                 responseStatus.textContent = 'AI Response (Tagalog) sent to orchestrator.'; // Clarified status
+                 responseStatus.style.color = 'var(--success-color)';
+            } else if (isLanguageSwitch && responseStatus) {
+                 responseStatus.textContent = 'AI Response displayed in Tagalog.'; // Different status for lang switch
+                 responseStatus.style.color = 'var(--success-color)';
+            }
+
+            // Post translated message to parent for Angular
+            if (parent && parent !== window && typeof parent.postMessage === 'function') {
+                try {
+                    parent.postMessage({ type: 'geminiResponse', data: translatedText }, 'http://127.0.0.1:5001');
+                    console.log("Posted Tagalog translated Gemini response to parent (conversation.html).");
+                } catch (e) {
+                    console.error("Error posting translated message to parent (conversation.html):", e);
+                }
+            }
+        }
+
         // Add function to send to Ollama
         function sendToOllama() {
             const sendBtn = document.getElementById('sendOllamaBtn');
@@ -1156,7 +1238,7 @@
             
             if (responseCard) responseCard.style.display = 'block';
             if (responseContent) {
-                responseContent.textContent = 'Waiting for response...';
+            responseContent.textContent = 'Waiting for response...';
                 responseContent.style.display = 'block'; // Ensure content area is visible initially
             }
             if (responseStatus) responseStatus.style.display = 'block'; // Ensure status area is visible initially
@@ -1188,50 +1270,53 @@
                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to AI';
                 
                 if (data.success) {
-                    if (responseContent) {
-                        responseContent.textContent = data.response;
-                        responseContent.style.display = 'block'; // Make sure it's visible
-                    }
-                    const responseText = data.response; 
+                    originalGeminiResponse = data.response; // Store the original English response
+                    const responseText = originalGeminiResponse; 
 
+                    if (currentLanguage === 'tagalog') {
+                        // If in Tagalog mode, translate before displaying and sending to parent
+                        translateAndDisplayResponse(responseText, true);
+                    } else {
+                        // English mode: display directly and send original to parent
+                        if (responseContent) responseContent.textContent = responseText;
+                        if (responseStatus) {
+                             responseStatus.textContent = 'AI Response (English) sent to orchestrator.'; // Clarified status
+                    responseStatus.style.color = 'var(--success-color)';
+                        }
+                        // Send the original English response to the parent window (conversation.html)
+                        if (parent && parent !== window && typeof parent.postMessage === 'function') {
+                            try {
+                                parent.postMessage({ type: 'geminiResponse', data: responseText }, 'http://127.0.0.1:5001');
+                                console.log("Successfully posted original Gemini response to parent (conversation.html).");
+                            } catch (e) {
+                                console.error("Error posting message to parent (conversation.html):", e);
+                                if (responseStatus) {
+                                    responseStatus.innerHTML = `
+                                        Response received. Could not send to conversation orchestrator.
+                                        <button onclick="manualSendToAngular('${responseText.replace(/'/g, "\\'")}')" class="btn btn-primary" style="margin-top: 10px; display: block;">
+                                            Try Sending to Sign Animator Manually
+                                        </button>`;
+                                    responseStatus.style.color = 'var(--warning-color)';
+                                }
+                            }
+                        } else {
+                            console.warn("Not in an iframe or parent.postMessage not available. Displaying locally.");
+                            if (responseStatus) {
+                                responseStatus.innerHTML = `
+                                    Response received. Cannot auto-forward from this context.
+                                    <button onclick="manualSendToAngular('${responseText.replace(/'/g, "\\'")}')" class="btn btn-primary" style="margin-top: 10px; display: block;">
+                                        Manually Open with Sign Animator
+                                    </button>`;
+                                responseStatus.style.color = 'var(--warning-color)';
+                            }
+                        }
+                    }
+                    
                     if (toggleResponseBtn) {
                         toggleResponseBtn.style.display = 'inline-block';
                         toggleResponseBtn.textContent = 'Hide Response';
                     }
-                    aiResponseVisible = true; // Set state correctly
-                    
-                    if (parent && parent !== window && typeof parent.postMessage === 'function') {
-                        try {
-                            parent.postMessage({ type: 'geminiResponse', data: responseText }, 'http://127.0.0.1:5001');
-                            responseStatus.textContent = 'Response received and sent to conversation orchestrator.';
-                    responseStatus.style.color = 'var(--success-color)';
-                            console.log("Successfully posted geminiResponse to parent (conversation.html).");
-                        } catch (e) {
-                            console.error("Error posting message to parent (conversation.html):", e);
-                            responseStatus.innerHTML = `
-                                Response received. Could not send to conversation orchestrator.
-                                <button onclick="manualSendToAngular(\'${responseText}\')" class="btn btn-primary" style="margin-top: 10px; display: block;">
-                                    Try Sending to Sign Animator Manually
-                                </button>`;
-                            responseStatus.style.color = 'var(--warning-color)';
-                        }
-                    } else {
-                        console.warn("Not in an iframe or parent.postMessage not available. Displaying locally.");
-                        // If not in an iframe, or parent communication is not set up as expected,
-                        // provide a manual option directly to Angular as a last resort.
-                        responseStatus.innerHTML = `
-                            Response received. Cannot auto-forward from this context.
-                            <button onclick="manualSendToAngular(\'${responseText}\')" class="btn btn-primary" style="margin-top: 10px; display: block;">
-                                Manually Open with Sign Animator
-                            </button>`;
-                        responseStatus.style.color = 'var(--warning-color)';
-                    }
-                    
-                    // Add animation to highlight the new response
-                    responseContent.classList.add('highlight-response');
-                    setTimeout(() => {
-                        responseContent.classList.remove('highlight-response');
-                    }, 1500);
+                    aiResponseVisible = true; 
                 } else {
                     responseContent.textContent = 'Error: ' + (data.error || 'Unknown error');
                     responseStatus.textContent = 'Failed to get response from AI.';
@@ -1247,7 +1332,7 @@
                 if (responseContent) responseContent.textContent = 'Error: ' + error.message;
                 if (responseStatus) {
                     responseStatus.textContent = 'Failed to communicate with AI server.';
-                    responseStatus.style.color = 'var(--danger-color)';
+                responseStatus.style.color = 'var(--danger-color)';
                 }
                 if (toggleResponseBtn) toggleResponseBtn.style.display = 'none'; 
             });
@@ -1341,14 +1426,7 @@
         // Call status check after startup
         setTimeout(checkServerStatus, 2000);
 
-        // Added event listener for the toggle button
-        const responseCard = document.querySelector('.response-card');
-        const responseContent = document.getElementById('responseContent');
-        const responseStatus = document.getElementById('responseStatus');
-        const toggleResponseBtn = document.getElementById('toggleResponseBtn'); 
-        let aiResponseVisible = true; // Assume visible if button is shown
-
-        // Ensure elements are found before adding listener
+        // Ensure elements are found before adding listener for toggleResponseBtn
         if (toggleResponseBtn) {
             toggleResponseBtn.addEventListener('click', () => {
                 console.log('Toggle response button clicked. aiResponseVisible was:', aiResponseVisible);
