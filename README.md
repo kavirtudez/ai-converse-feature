@@ -199,15 +199,14 @@ This orchestrated page embeds both the **sign input** interface and the **sign a
 [ Angular Frontend (AI Reply → Animated Signing Avatar) ]
 ```
 
----
+
 
 ## 🖼 Flow Diagram
 
 ```markdown
-![Architecture Diagram](image.png)
+![Architecture Diagram](image.jpg)
 ```
 
----
 
 ## ⚠️ Notes
 
