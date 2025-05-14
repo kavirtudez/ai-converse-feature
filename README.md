@@ -204,7 +204,7 @@ This orchestrated page embeds both the **sign input** interface and the **sign a
 ## 🖼 Flow Diagram
 
 ```markdown
-![Architecture Diagram](image.jpg)
+![Architecture Diagram](image.png)
 ```
 
 
