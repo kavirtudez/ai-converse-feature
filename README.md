@@ -116,27 +116,7 @@ This section outlines the journey of communication within the application, from 
 
 **Overall Flow Diagram (Conceptual):**
 
-```
-[User Signs via Webcam]
-       |
-       v
-[1. Sign Recognition (app.py)] -- Recognized Text --> [2. AI Conversation (integrate_gemini.py)]
-       |                                                         |
-       | (If Orchestrated)                                       | AI Text Response
-       v                                                         v
-[Orchestrator (sign_conversation.py)]                             [3. Forward to SL Avatar (app.py)]
-       |                                                         |
-       +------------------- Display Update ----------------------+
-                                   |
-                                   v
-      [4. (Optional) Text Translation (asl&fslmodel/backend/translate_backend.py)]
-                                   |
-                                   v
-        [5. SL Avatar (asl&fslmodel/frontend) for Sign Animation]
-                                   |
-                                   v
-                         [Animated Sign Output]
-```
+![image](https://github.com/user-attachments/assets/4f64fb44-bbcf-4757-9242-48683cb0a348)
 
 **Step-by-Step Breakdown (IPO Format):**
 
