@@ -203,10 +203,8 @@ This orchestrated page embeds both the **sign input** interface and the **sign a
 
 ## 🖼 Flow Diagram
 
-> Replace `image.png` with your actual architecture diagram filename in your repo.
-
 ```markdown
-![Architecture Diagram](./image.png)
+![Architecture Diagram](image.png)
 ```
 
 ---
