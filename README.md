@@ -116,7 +116,7 @@ This section outlines the journey of communication within the application, from 
 
 **Overall Flow Diagram (Conceptual):**
 
-![image](https://github.com/user-attachments/assets/4f64fb44-bbcf-4757-9242-48683cb0a348)
+![Overall Flow Diagram](image.png)
 
 **Step-by-Step Breakdown (IPO Format):**
 
