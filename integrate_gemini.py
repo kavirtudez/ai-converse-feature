@@ -174,30 +174,33 @@ def main():
     """Main entry point for the Gemini integration service"""
     logger.info("Starting Gemini integration service")
     
-    # Check if Gemini API is accessible
-    status = gemini.check_status()
+    # Check if Gemini API is accessible via the handler (which uses the API key)
+    # This relies on gemini.check_status() correctly using the API key
+    # and not broadly depending on ADC for its basic check.
+    status = gemini.check_status() 
     if status:
-        logger.info(f"Gemini API is accessible with model {gemini.model}")
+        logger.info(f"Gemini API seems accessible with model {gemini.model} using the provided API key.")
+        # The following lines are commented out to avoid triggering broader ADC-dependent calls during startup:
+        # try:
+        #     # This genai.list_models() call might be causing issues if ADC is not configured
+        #     # and the API key alone is not sufficient for this global library call.
+        #     models = genai.list_models() 
+        #     model_names = [m.name for m in models if 'generateContent' in m.supported_generation_methods]
+        #     logger.info(f"Available Gemini models (if discoverable): {model_names}")
+        # except Exception as e:
+        #     logger.warning(f"Could not list models (this might be due to auth context): {e}")
         
-        # List available models
-        try:
-            models = genai.list_models()
-            model_names = [m.name for m in models if 'generateContent' in m.supported_generation_methods]
-            logger.info(f"Available Gemini models: {model_names}")
-        except Exception as e:
-            logger.warning(f"Could not list models: {e}")
-        
-        # Test response quality
-        test_inputs = ["hello", "thanks", "iloveyou"]
-        logger.info("Testing response quality:")
-        for test in test_inputs:
-            response = gemini.get_response(test)
-            logger.info(f"  Input: '{test}' → Response: '{response}'")
+        # logger.info("Skipping initial response quality tests during startup to isolate auth issues.")
+        # # test_inputs = ["hello", "thanks", "iloveyou"]
+        # # logger.info("Testing response quality:")
+        # # for test in test_inputs:
+        # #     response = gemini.get_response(test)
+        # #     logger.info(f"  Input: '{test}' → Response: '{response}'")
             
-        logger.info("Response testing complete - all systems operational")
+        # logger.info("Response testing complete - all systems operational")
     else:
-        logger.warning(f"Gemini API is not accessible or model {gemini.model} is not available")
-        logger.warning("Please check your API key and internet connection")
+        logger.warning(f"Gemini API may not be accessible with model {gemini.model} using the provided API key, or check_status() failed.")
+        logger.warning("Please check your API key, ensure the Gemini API is enabled for it, and check internet connection.")
     
     # Run the Flask app
     try:

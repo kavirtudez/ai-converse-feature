@@ -635,7 +635,10 @@
                 </div>
                 
                 <div class="card response-card" style="display: none;">
-                    <div class="card-title">AI Response</div>
+                    <div class="card-title">
+                        AI Response
+                        <button id="toggleResponseBtn" style="margin-left: 10px; padding: 0.3rem 0.6rem; font-size: 0.8rem; vertical-align: middle; display: none; cursor:pointer;">Hide Response</button>
+                    </div>
                     <div class="response-content" id="responseContent">
                         Waiting for response...
                     </div>
@@ -876,9 +879,9 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    sentenceText.textContent = translations[currentLanguage].noSigns;
+            sentenceText.textContent = translations[currentLanguage].noSigns;
                     updateSignBadges();
-                    lastSentence = [];
+            lastSentence = [];
                 }
             })
             .catch(error => console.error('Error clearing sentence:', error));
@@ -1058,7 +1061,7 @@
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({
+                        body: JSON.stringify({ 
                             image: imageData,
                             clientId: clientId,
                             language: currentLanguage
@@ -1146,19 +1149,18 @@
 
         // Add function to send to Ollama
         function sendToOllama() {
-            // Disable the button during processing
             const sendBtn = document.getElementById('sendOllamaBtn');
-            const responseCard = document.querySelector('.response-card');
-            const responseContent = document.getElementById('responseContent');
-            const responseStatus = document.getElementById('responseStatus');
             
             sendBtn.disabled = true;
             sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
             
-            // Show the response card
-            responseCard.style.display = 'block';
-            responseContent.textContent = 'Waiting for response...';
-            responseStatus.textContent = 'Processing...';
+            if (responseCard) responseCard.style.display = 'block';
+            if (responseContent) {
+                responseContent.textContent = 'Waiting for response...';
+                responseContent.style.display = 'block'; // Ensure content area is visible initially
+            }
+            if (responseStatus) responseStatus.style.display = 'block'; // Ensure status area is visible initially
+            if (toggleResponseBtn) toggleResponseBtn.style.display = 'none'; 
             
             // Use the same server URL
             const serverUrl = window.location.origin;
@@ -1186,15 +1188,23 @@
                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to AI';
                 
                 if (data.success) {
-                    responseContent.textContent = data.response;
-                    const responseText = data.response; // Gemini's response text
+                    if (responseContent) {
+                        responseContent.textContent = data.response;
+                        responseContent.style.display = 'block'; // Make sure it's visible
+                    }
+                    const responseText = data.response; 
+
+                    if (toggleResponseBtn) {
+                        toggleResponseBtn.style.display = 'inline-block';
+                        toggleResponseBtn.textContent = 'Hide Response';
+                    }
+                    aiResponseVisible = true; // Set state correctly
                     
-                    // Send the response to the parent window (conversation.html)
                     if (parent && parent !== window && typeof parent.postMessage === 'function') {
                         try {
                             parent.postMessage({ type: 'geminiResponse', data: responseText }, 'http://127.0.0.1:5001');
                             responseStatus.textContent = 'Response received and sent to conversation orchestrator.';
-                            responseStatus.style.color = 'var(--success-color)';
+                    responseStatus.style.color = 'var(--success-color)';
                             console.log("Successfully posted geminiResponse to parent (conversation.html).");
                         } catch (e) {
                             console.error("Error posting message to parent (conversation.html):", e);
@@ -1226,6 +1236,7 @@
                     responseContent.textContent = 'Error: ' + (data.error || 'Unknown error');
                     responseStatus.textContent = 'Failed to get response from AI.';
                     responseStatus.style.color = 'var(--danger-color)';
+                    if (toggleResponseBtn) toggleResponseBtn.style.display = 'none'; 
                 }
             })
             .catch(error => {
@@ -1233,9 +1244,12 @@
                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to AI';
                 
                 console.error('Error sending to AI:', error);
-                responseContent.textContent = 'Error: ' + error.message;
-                responseStatus.textContent = 'Failed to communicate with AI server.';
-                responseStatus.style.color = 'var(--danger-color)';
+                if (responseContent) responseContent.textContent = 'Error: ' + error.message;
+                if (responseStatus) {
+                    responseStatus.textContent = 'Failed to communicate with AI server.';
+                    responseStatus.style.color = 'var(--danger-color)';
+                }
+                if (toggleResponseBtn) toggleResponseBtn.style.display = 'none'; 
             });
         }
 
@@ -1326,6 +1340,32 @@
 
         // Call status check after startup
         setTimeout(checkServerStatus, 2000);
+
+        // Added event listener for the toggle button
+        const responseCard = document.querySelector('.response-card');
+        const responseContent = document.getElementById('responseContent');
+        const responseStatus = document.getElementById('responseStatus');
+        const toggleResponseBtn = document.getElementById('toggleResponseBtn'); 
+        let aiResponseVisible = true; // Assume visible if button is shown
+
+        // Ensure elements are found before adding listener
+        if (toggleResponseBtn) {
+            toggleResponseBtn.addEventListener('click', () => {
+                console.log('Toggle response button clicked. aiResponseVisible was:', aiResponseVisible);
+                if (aiResponseVisible) {
+                    if(responseContent) responseContent.style.display = 'none'; 
+                    toggleResponseBtn.textContent = 'Show Response';
+                    aiResponseVisible = false;
+                } else {
+                    if(responseContent) responseContent.style.display = 'block'; 
+                    toggleResponseBtn.textContent = 'Hide Response';
+                    aiResponseVisible = true;
+                }
+                console.log('aiResponseVisible is now:', aiResponseVisible);
+            });
+        } else {
+            console.error('Could not find toggleResponseBtn!');
+        }
     </script>
 </body>
 </html> 

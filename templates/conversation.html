@@ -156,29 +156,29 @@
 </head>
 <body>
     <div class="header">
-        <h1>AI Sign Language Conversation</h1>
-        <div class="connection-status">
-            <span id="connection-indicator"></span>
-            <span id="connection-text">Connecting...</span>
-        </div>
+            <h1>AI Sign Language Conversation</h1>
+            <div class="connection-status">
+                <span id="connection-indicator"></span>
+                <span id="connection-text">Connecting...</span>
+            </div>
     </div>
-
-    <div class="status-bar">
-        <div class="status-item">
+        
+        <div class="status-bar">
+                <div class="status-item">
             <span>Sign Input (app.py):</span>
             <div class="status-indicator" id="sign-app-status"></div>
-        </div>
-        <div class="status-item">
+                </div>
+                <div class="status-item">
             <span>Sign Output (Angular):</span>
             <div class="status-indicator" id="angular-app-status"></div>
-        </div>
-        <div class="status-item">
+                </div>
+                <div class="status-item">
             <span>Gemini Service:</span>
             <div class="status-indicator" id="gemini-status"></div>
         </div>
         <button id="refresh-status-btn">Refresh Status</button>
-    </div>
-
+            </div>
+            
     <div class="iframes-container">
         <div class="iframe-wrapper">
             <div class="iframe-header">Sign Recognition Input (app.py @ 127.0.0.1:5000)</div>
@@ -190,19 +190,19 @@
             <!-- This iframe hosts the Angular app and MUST have id="angular-app-frame" -->
             <!-- Added ?embedded=true to signal Angular it's in an iframe -->
             <iframe id="angular-app-frame" src="http://localhost:4200/?embedded=true" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-        </div>
-    </div>
-
+                </div>
+            </div>
+            
     <!-- Controls are removed as app.py will handle sending -->
 
-    <div class="debug-panel">
+        <div class="debug-panel">
         <div class="debug-header" id="debug-header-toggle">
-            <span>Debug Information</span>
+                <span>Debug Information</span>
             <button class="debug-clear" id="debug-clear-btn">Clear</button>
         </div>
         <div class="debug-content" id="debug-content-area" style="display: block;"></div> <!-- Initially visible -->
     </div>
-
+    
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const socket = io('http://127.0.0.1:5001', {
@@ -287,9 +287,9 @@
             
             refreshStatusBtn.addEventListener('click', () => {
                 debugLog('Manual status refresh requested.');
-                socket.emit('check_status');
+                    socket.emit('check_status');
             });
-
+            
             function updateStatusIndicator(element, isActive) {
                 if (element) {
                     element.className = 'status-indicator ' + (isActive ? 'status-active' : 'status-inactive');
@@ -335,4 +335,4 @@
         });
     </script>
 </body>
-</html>
+</html> 
